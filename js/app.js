@@ -146,11 +146,58 @@ window.App = (function () {
   // ---------- navigasi ----------
   function daftar(h) { halaman.push(h); }
 
-  function gambarNav() {
-    const tombol = (h, pendek) => `<button type="button" class="${h.id === state.aktif ? 'aktif' : ''}" data-hal="${esc(h.id)}">${ikon[h.ikon] || ikon.monitor}<span>${esc(pendek ? (h.pendek || h.label) : h.label)}</span></button>`;
-    $('navSamping').innerHTML = halaman.map(h => tombol(h, false)).join('');
-    $('bottomnav').innerHTML = halaman.map(h => tombol(h, true)).join('');
+  // Nav dibangun sekali; gelembung kaca (iOS) bergeser ke menu aktif dengan animasi pegas.
+  let navDibangun = false, navSudahTampil = false;
+
+  function bangunNav() {
+    const isi = (wadah, pendek) => {
+      wadah.innerHTML = '<span class="gelembung" aria-hidden="true"></span>' + halaman.map(h =>
+        '<button type="button" data-hal="' + esc(h.id) + '" title="' + esc(h.label) + '">' + (ikon[h.ikon] || ikon.monitor) +
+        '<span>' + esc(pendek ? (h.pendek || h.label) : h.label) + '</span></button>').join('');
+    };
+    isi($('navSamping'), false);
+    isi($('bottomnav'), true);
     document.querySelectorAll('[data-hal]').forEach(b => b.addEventListener('click', () => { buka(b.dataset.hal); tutupLaci(); }));
+    if (window.ResizeObserver) {
+      const ro = new ResizeObserver(() => tandaiNav(false));
+      ro.observe($('navSamping')); ro.observe($('bottomnav'));
+    }
+    navDibangun = true;
+  }
+
+  function posisiGelembung(wadah, tombol, animasi) {
+    const g = wadah.querySelector('.gelembung');
+    if (!g) return;
+    if (!tombol || !tombol.offsetWidth) { g.style.opacity = 0; return; }
+    if (!animasi) g.classList.add('langsung');
+    g.style.opacity = 1;
+    g.style.width = tombol.offsetWidth + 'px';
+    g.style.height = tombol.offsetHeight + 'px';
+    g.style.transform = 'translate(' + tombol.offsetLeft + 'px, ' + tombol.offsetTop + 'px)';
+    if (animasi) { g.classList.remove('lenting'); void g.offsetWidth; g.classList.add('lenting'); }
+    else requestAnimationFrame(() => g.classList.remove('langsung'));
+  }
+
+  function tandaiNav(animasi) {
+    [$('navSamping'), $('bottomnav')].forEach(wadah => {
+      let aktif = null;
+      wadah.querySelectorAll('button').forEach(b => { const on = b.dataset.hal === state.aktif; b.classList.toggle('aktif', on); if (on) aktif = b; });
+      posisiGelembung(wadah, aktif, animasi);
+    });
+  }
+
+  function gambarNav() {
+    if (!navDibangun) bangunNav();
+    tandaiNav(navSudahTampil);
+    navSudahTampil = true;
+  }
+
+  // ---------- sidebar ciut (desktop), pilihan diingat ----------
+  function setCiut(ya) {
+    $('shell').classList.toggle('ciut', ya);
+    const b = $('btnCiut');
+    if (b) { b.title = ya ? 'Lebarkan menu' : 'Ciutkan menu'; b.setAttribute('aria-label', b.title); }
+    try { localStorage.setItem('snd_ciut', ya ? '1' : '0'); } catch (e) {}
   }
 
   function buka(id) {
@@ -186,6 +233,8 @@ window.App = (function () {
   // ---------- mulai ----------
   function mulai() {
     $('btnMenu').addEventListener('click', bukaLaci);
+    $('btnCiut').addEventListener('click', () => setCiut(!$('shell').classList.contains('ciut')));
+    try { setCiut(localStorage.getItem('snd_ciut') === '1'); } catch (e) {}
     $('tirai').addEventListener('click', tutupLaci);
     $('btnKeluar').addEventListener('click', () => keluar(true));
     document.querySelectorAll('[data-tutup]').forEach(el => el.addEventListener('click', sheet.tutup));

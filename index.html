@@ -23,11 +23,12 @@
   Kerangka halaman. Fitur baru = satu file js/page-<nama>.js yang memanggil App.daftar({...}),
   lalu tambahkan <script src> di bawah. Menu & navigasi dibuat otomatis.
 -->
-<div class="shell">
+<div class="shell" id="shell">
   <aside class="sidebar" id="sidebar" aria-label="Menu utama">
     <div class="merek">
       <img src="./icons/favicon.svg" alt="" width="34" height="34">
       <div><div class="merek-judul">SND Apps</div><div class="merek-sub">Supply &amp; Demand · Otoklix</div></div>
+      <button type="button" class="tombol-ikon ciut-tombol hanya-desktop" id="btnCiut" aria-label="Ciutkan menu" title="Ciutkan menu"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
     </div>
     <nav class="nav-samping" id="navSamping"></nav>
     <div class="sidebar-kaki">

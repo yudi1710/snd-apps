@@ -274,3 +274,69 @@ label.label { display: block; font-size: 12px; font-weight: 600; color: var(--ab
 .tabel-ks .angka { text-align: right; white-space: nowrap; }
 .tabel-ks tr.minus td.angka:last-child, .tabel-ks tr.habis td.angka:last-child { color: var(--merah); font-weight: 700; }
 .gulir-x { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+
+/* ========== Efek gelembung (bubble) ala iOS + sidebar bisa diciutkan ========== */
+:root {
+  --pegas: cubic-bezier(.34, 1.56, .64, 1);
+  --halus: cubic-bezier(.32, .72, 0, 1);
+  --nav-kaca: rgba(255,255,255,.72);
+  --bottomnav: calc(88px + env(safe-area-inset-bottom));
+}
+.nav-samping { position: relative; }
+.nav-samping button, .bottomnav button { position: relative; z-index: 1; transition: transform .28s var(--pegas), color .2s; -webkit-user-select: none; user-select: none; }
+.nav-samping button:active, .bottomnav button:active { transform: scale(.92); }
+.nav-samping button:hover:not(.aktif) { background: var(--navy-muda); }
+.nav-samping button.aktif { background: transparent; color: var(--navy); }
+.nav-samping button span { overflow: hidden; white-space: nowrap; max-width: 200px; transition: max-width .4s var(--halus), opacity .25s; }
+
+.gelembung { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; opacity: 0;
+  transition: transform .55s var(--pegas), width .55s var(--pegas), height .55s var(--pegas), opacity .2s; will-change: transform; }
+.gelembung.langsung { transition: opacity .2s; }
+.gelembung::before { content: ""; position: absolute; inset: 0; border-radius: 16px;
+  background: linear-gradient(150deg, rgba(255,255,255,.9) 0%, rgba(205,221,255,.6) 100%);
+  backdrop-filter: blur(14px) saturate(1.9); -webkit-backdrop-filter: blur(14px) saturate(1.9);
+  border: 1px solid rgba(255,255,255,.75);
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.95), inset 0 -9px 16px rgba(0,46,180,.10), 0 10px 22px rgba(0,46,180,.20), 0 2px 5px rgba(0,46,180,.14); }
+.gelembung::after { content: ""; position: absolute; left: 12%; right: 12%; top: 3px; height: 38%; border-radius: 999px; background: linear-gradient(rgba(255,255,255,.75), rgba(255,255,255,0)); }
+.gelembung.lenting::before { animation: lenting .55s var(--pegas); }
+@keyframes lenting { 0% { transform: scale(.84, .9); } 45% { transform: scale(1.09, 1.06); } 100% { transform: scale(1); } }
+
+/* bottom nav HP: pil kaca melayang */
+.bottomnav { left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); padding: 6px; gap: 4px; border: 1px solid rgba(255,255,255,.6); border-radius: 30px;
+  background: var(--nav-kaca); backdrop-filter: blur(22px) saturate(1.8); -webkit-backdrop-filter: blur(22px) saturate(1.8);
+  box-shadow: 0 12px 32px rgba(20,20,43,.2), inset 0 1px 0 rgba(255,255,255,.8); }
+.bottomnav button { border-radius: 24px; padding: 9px 4px 8px; }
+.bottomnav .gelembung::before { border-radius: 24px; }
+
+/* sedikit pegas di tombol lain */
+.tombol, .chip, .segmen button, .menu-kartu, .tombol-ikon { transition: transform .28s var(--pegas), box-shadow .15s, background .2s, border-color .15s; }
+.tombol:active, .chip:active, .segmen button:active, .tombol-ikon:active { transform: scale(.93); }
+
+/* tombol ciutkan + sidebar ciut (desktop) */
+.ciut-tombol { margin-left: auto; flex: none; }
+.ciut-tombol svg { transition: transform .5s var(--pegas); }
+@media (min-width: 900px) {
+  .shell { transition: grid-template-columns .5s var(--halus); }
+  .shell.ciut { grid-template-columns: 76px 1fr; }
+  .sidebar { overflow: hidden; transition: padding .4s var(--halus); }
+  .shell.ciut .sidebar { padding: 18px 10px; }
+  .shell.ciut .ciut-tombol svg { transform: rotate(180deg); }
+  .shell.ciut .merek { flex-direction: column; align-items: center; gap: 10px; padding: 4px 0 14px; }
+  .shell.ciut .merek > div { display: none; }
+  .shell.ciut .ciut-tombol { margin-left: 0; }
+  .shell.ciut .nav-samping button { justify-content: center; gap: 0; padding: 12px 0; }
+  .shell.ciut .nav-samping button span { max-width: 0; opacity: 0; }
+  .shell.ciut .sidebar-kaki { flex-direction: column; gap: 8px; padding: 12px 0 4px; }
+  .shell.ciut .pengguna, .shell.ciut #versiApp { display: none; }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root { --nav-kaca: rgba(30,34,60,.72); }
+  .gelembung::before { background: linear-gradient(150deg, rgba(120,160,255,.42), rgba(70,110,235,.22)); border-color: rgba(160,190,255,.35);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.3), inset 0 -9px 16px rgba(0,0,0,.25), 0 10px 22px rgba(0,0,0,.45), 0 2px 5px rgba(0,0,0,.3); }
+  .gelembung::after { background: linear-gradient(rgba(255,255,255,.3), rgba(255,255,255,0)); }
+  .bottomnav { border-color: rgba(160,190,255,.18); box-shadow: 0 12px 32px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.12); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gelembung, .gelembung::before, .shell, .sidebar, .nav-samping button span { transition: none !important; animation: none !important; }
+}
