@@ -1,7 +1,7 @@
 /* Service worker SND Apps: cache kerangka app (app shell) supaya buka cepat & bisa di-install.
    Data selalu diambil dari server (tidak di-cache). Naikkan VERSI tiap rilis supaya cache lama dibuang. */
-const VERSI = 'snd-apps-2026.11.14b';
-const SHELL = ['./', './index.html', './css/app.css', './js/config.js', './js/app.js', './js/page-monitoring.js',
+const VERSI = 'snd-apps-2026.11.14c';
+const SHELL = ['./', './index.html', './css/app.css', './js/config.js', './js/app.js', './js/page-beranda.js', './js/page-monitoring.js', './js/page-ks.js',
   './manifest.webmanifest', './icons/favicon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {

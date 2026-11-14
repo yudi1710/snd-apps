@@ -27,6 +27,8 @@ window.App = (function () {
     luar: '<svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>',
     kosong: '<svg viewBox="0 0 24 24"><path d="M4 7h16l-1.5 12h-13zM9 7V5a3 3 0 0 1 6 0v2"/></svg>',
     grafik: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+    beranda: '<svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/></svg>',
+    kartu: '<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
     keluar: '<svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3M13 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg>',
   };
 
@@ -145,9 +147,9 @@ window.App = (function () {
   function daftar(h) { halaman.push(h); }
 
   function gambarNav() {
-    const tombol = h => `<button type="button" class="${h.id === state.aktif ? 'aktif' : ''}" data-hal="${esc(h.id)}">${ikon[h.ikon] || ikon.monitor}<span>${esc(h.label)}</span></button>`;
-    $('navSamping').innerHTML = halaman.map(tombol).join('');
-    $('bottomnav').innerHTML = halaman.map(tombol).join('');
+    const tombol = (h, pendek) => `<button type="button" class="${h.id === state.aktif ? 'aktif' : ''}" data-hal="${esc(h.id)}">${ikon[h.ikon] || ikon.monitor}<span>${esc(pendek ? (h.pendek || h.label) : h.label)}</span></button>`;
+    $('navSamping').innerHTML = halaman.map(h => tombol(h, false)).join('');
+    $('bottomnav').innerHTML = halaman.map(h => tombol(h, true)).join('');
     document.querySelectorAll('[data-hal]').forEach(b => b.addEventListener('click', () => { buka(b.dataset.hal); tutupLaci(); }));
   }
 
@@ -200,5 +202,5 @@ window.App = (function () {
     if (muatTokenTersimpan()) setelahMasuk(); else tampilLogin('');
   }
 
-  return { daftar, buka, mulai, api, toast, sheet, keluar, esc, angka, rp, tanggal, hariAntara, ikon, state, $ };
+  return { daftar, halaman: () => halaman, buka, mulai, api, toast, sheet, keluar, esc, angka, rp, tanggal, hariAntara, ikon, state, $ };
 })();

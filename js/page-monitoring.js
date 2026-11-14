@@ -256,5 +256,5 @@
       .catch(e => { btn.disabled = false; toast(e.message || 'Gagal menyimpan.', true); });
   }
 
-  App.daftar({ id: 'monitoring', label: 'Monitoring MRP PO', ikon: 'monitor', render });
+  App.daftar({ id: 'monitoring', label: 'Monitoring MRP PO', pendek: 'PO', ikon: 'monitor', desk: 'PO VinFast dari sheet Incoming 6 cabang: progres terima, umur PO, ETA, dan status PO di Servia.', tanda: 'Buka monitoring PO', render });
 })();
