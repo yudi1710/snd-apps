@@ -348,3 +348,18 @@ label.label { display: block; font-size: 12px; font-weight: 600; color: var(--ab
 .login-tombol:empty { min-height: 44px; border-radius: 999px; background: linear-gradient(90deg, var(--trek) 25%, var(--trek2) 50%, var(--trek) 75%); background-size: 200% 100%; animation: kilau 1.2s infinite; }
 .login-kartu .teks-kecil:empty { display: none; }
 .login-kartu .catatan { margin-top: 4px; color: var(--abu-muda); font-size: 11.5px; }
+
+/* ========== Lonceng & notifikasi ========== */
+.lonceng { position: relative; }
+.lencana { position: absolute; top: 3px; right: 2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--merah); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 18px; text-align: center; display: none; box-shadow: 0 0 0 2px var(--kartu); }
+.lencana.tampil { display: block; animation: lenting .5s var(--pegas); }
+.notif { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1px solid var(--garis); border-radius: 14px; margin-bottom: 8px; background: var(--kartu); cursor: pointer; transition: transform .2s var(--pegas), border-color .2s; }
+.notif:active { transform: scale(.98); }
+.notif.baru { border-color: var(--navy); background: var(--navy-muda); }
+.notif-ikon { flex: none; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; font-size: 18px; background: var(--merah-muda); }
+.notif-ikon.oranye { background: var(--oranye-muda); }
+.notif-isi { min-width: 0; flex: 1; }
+.notif-judul { font-weight: 700; font-size: 13.5px; word-break: break-all; }
+.notif-desk { font-size: 12.5px; margin-top: 2px; }
+.notif-meta { font-size: 11.5px; color: var(--abu); margin-top: 3px; }
+.titik-baru { flex: none; width: 9px; height: 9px; margin-top: 6px; border-radius: 50%; background: var(--navy); }

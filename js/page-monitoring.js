@@ -73,13 +73,13 @@
   }
 
   function muat() {
-    api('getDataApp').then(d => { dimuat = true; terima(d); }).catch(gagal);
+    App.ambil('getDataApp', 60000).then(d => { dimuat = true; terima(d); }).catch(gagal);
   }
 
   function sync() {
     setSibuk(true);
     toast('Membaca sheet Incoming semua cabang…');
-    api('syncDariApp').then(d => { terima(d); toast('Sync selesai.'); }).catch(gagal);
+    api('syncDariApp').then(d => { App.isi('getDataApp', d); terima(d); toast('Sync selesai.'); }).catch(gagal);
   }
 
   function setSibuk(sibuk) {
@@ -99,6 +99,7 @@
     const open = d.rows.filter(r => !r.selesai).length;
     if (ui) ui.setSub(`${d.update || 'Belum sync'} · ${open} PO open · ${d.rows.length - open} selesai`);
     gambarSemua();
+    if (App.state.bukaPO) { const k = App.state.bukaPO; App.state.bukaPO = ''; bukaDetail(k); } // dibuka dari notifikasi
   }
 
   function gambarSemua() {
@@ -253,7 +254,7 @@
     btn.disabled = true;
     toast('Menyimpan…');
     api('simpanEta', key, $('fEta').value, $('fCatatan').value)
-      .then(d => { terima(d); sheet.tutup(); toast('ETA & catatan tersimpan.'); })
+      .then(d => { App.isi('getDataApp', d); terima(d); sheet.tutup(); toast('ETA & catatan tersimpan.'); })
       .catch(e => { btn.disabled = false; toast(e.message || 'Gagal menyimpan.', true); });
   }
 

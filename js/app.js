@@ -7,7 +7,8 @@
 window.App = (function () {
   const CFG = window.SND_CONFIG || {};
   const halaman = [];
-  const state = { aktif: null, email: '', konteks: null, token: '', tokenExp: 0 };
+  const state = { aktif: null, email: '', konteks: null, token: '', tokenExp: 0, bukaPO: '' };
+  const memo = {};
   const $ = id => document.getElementById(id);
 
   // ---------- helper teks & angka ----------
@@ -29,6 +30,7 @@ window.App = (function () {
     grafik: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
     beranda: '<svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/></svg>',
     kartu: '<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
+    lonceng: '<svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 21h4"/></svg>',
     keluar: '<svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3M13 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg>',
   };
 
@@ -88,6 +90,7 @@ window.App = (function () {
   function keluar(tampilkanLogin) {
     sessionStorage.removeItem('snd_token');
     state.token = ''; state.tokenExp = 0; state.email = '';
+    Object.keys(memo).forEach(k => delete memo[k]);
     try { google.accounts.id.disableAutoSelect(); } catch (e) {}
     if (tampilkanLogin !== false) tampilLogin('Kamu sudah keluar.');
   }
@@ -115,6 +118,20 @@ window.App = (function () {
     }
     return j.data;
   }
+
+  // ---------- cache data bersama (dipakai halaman & notifikasi) ----------
+  function kabari(aksi, data) { window.dispatchEvent(new CustomEvent('snd:data', { detail: { aksi, data } })); }
+  /** Ambil data dengan cache ttl ms; panggilan serentak berbagi satu request. */
+  function ambil(aksi, ttl, ...args) {
+    const m = memo[aksi];
+    if (m && ttl > 0 && Date.now() - m.t < ttl) return m.p;
+    const p = api(aksi, ...args).then(d => { memo[aksi] = { t: Date.now(), p: Promise.resolve(d) }; kabari(aksi, d); return d; })
+      .catch(e => { delete memo[aksi]; throw e; });
+    memo[aksi] = { t: Date.now(), p };
+    return p;
+  }
+  /** Simpan hasil terbaru (mis. setelah sync/simpan) ke cache bersama. */
+  function isi(aksi, data) { memo[aksi] = { t: Date.now(), p: Promise.resolve(data) }; kabari(aksi, data); }
 
   // ---------- toast ----------
   let toastTimer = null;
@@ -229,6 +246,7 @@ window.App = (function () {
     const awal = location.hash.slice(1);
     buka(halaman.some(h => h.id === awal) ? awal : (halaman[0] && halaman[0].id));
     api('getKonteks').then(k => { state.konteks = k; }).catch(() => {});
+    window.dispatchEvent(new Event('snd:masuk'));
   }
 
   // ---------- mulai ----------
@@ -252,5 +270,5 @@ window.App = (function () {
     if (muatTokenTersimpan()) setelahMasuk(); else tampilLogin('');
   }
 
-  return { daftar, halaman: () => halaman, buka, mulai, api, toast, sheet, keluar, esc, angka, rp, tanggal, hariAntara, ikon, state, $ };
+  return { daftar, halaman: () => halaman, buka, mulai, api, ambil, isi, toast, sheet, keluar, esc, angka, rp, tanggal, hariAntara, ikon, state, $ };
 })();
