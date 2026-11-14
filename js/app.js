@@ -73,7 +73,7 @@ window.App = (function () {
     const wadah = $('tombolGoogle');
     if (wadah) {
       wadah.innerHTML = '';
-      google.accounts.id.renderButton(wadah, { theme: 'filled_blue', size: 'large', shape: 'pill', text: 'signin_with', width: 280, locale: 'id' });
+      google.accounts.id.renderButton(wadah, { theme: 'filled_blue', size: 'large', shape: 'pill', text: 'signin_with', width: Math.max(200, Math.min(360, Math.floor(wadah.clientWidth || 280))), locale: 'id', logo_alignment: 'left' });
     }
     google.accounts.id.prompt();
   }
