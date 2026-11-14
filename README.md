@@ -1,6 +1,6 @@
 # SND Apps (PWA)
 
-Workspace tim Supply & Demand Otoklix. Frontend statis di GitHub Pages (bisa di-install di Android/iPhone),
+Workspace tim Supply & Demand Otoklix. Frontend statis di GitHub Pages (https://snd.ryukakirin.me) (bisa di-install di Android/iPhone),
 backend data di Google Apps Script (repo `SupplyDemandApps`). Masuk dengan akun Google `@otoklix.com`.
 
 ## Struktur

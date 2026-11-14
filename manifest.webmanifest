@@ -2,7 +2,7 @@
   "name": "SND Apps — Supply & Demand Otoklix",
   "short_name": "SND Apps",
   "description": "Workspace tim Supply & Demand Otoklix: monitoring PO MRP, dan fitur SND lainnya.",
-  "id": "/snd-apps/",
+  "id": "/",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
