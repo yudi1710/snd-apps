@@ -8,6 +8,7 @@
   const C = 0, K = 1, D = 2, AW = 3, IN = 4, OUT = 5, DMG = 6, BAL = 7, AREA = 8, MODEL = 9, URL = 10;
   let DATA = null; // { rows, cabang, gagal, update }
   let ui = null;
+  let subTeks = '';
   const F = { tampil: 'gabungan', cabang: '', q: '', kpi: '', urut: 'kode', batas: 120 };
 
   const minus = r => r[BAL] < 0;
@@ -66,7 +67,7 @@
       if (k && k.dataset.kode) detail(k.dataset.kode);
     });
 
-    if (DATA) semua(); else muat(false);
+    if (DATA) { ui.setSub(subTeks); semua(); } else muat(false);
   }
 
   function muat(paksa) {
@@ -75,12 +76,15 @@
     if (paksa) toast('Membaca tab KS semua cabang…');
     api('getDataKS').then(d => {
       DATA = d; gabungCache = null;
+      subTeks = `${d.update} · ${angka(d.rows.length)} baris · ${d.cabang.length} cabang`;
+      if (App.state.aktif !== 'ks') return; // pengguna sudah pindah halaman
       if (b) b.disabled = false;
-      ui.setSub(`${d.update} · ${angka(d.rows.length)} baris · ${d.cabang.length} cabang`);
+      ui.setSub(subTeks);
       if (d.gagal.length) toast('Sebagian cabang gagal dibaca: ' + d.gagal.join('; '), true);
       else if (paksa) toast('KS diperbarui.');
       semua();
     }).catch(e => {
+      if (App.state.aktif !== 'ks') return;
       if (b) b.disabled = false;
       toast(e.message || 'Gagal memuat KS.', true);
       if (!DATA) {

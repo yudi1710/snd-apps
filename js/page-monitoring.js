@@ -89,12 +89,13 @@
   function gagal(e) {
     setSibuk(false);
     toast(e && e.message ? e.message : 'Terjadi kesalahan.', true);
-    if (!dimuat) $('daftar').innerHTML = `<div class="kosong">${ikon.kosong}<div>${esc(e && e.message || 'Gagal memuat data')}</div><button type="button" class="tombol halus" style="margin-top:12px" onclick="App.buka('monitoring')">Coba lagi</button></div>`;
+    if (!dimuat && App.state.aktif === 'monitoring') $('daftar').innerHTML = `<div class="kosong">${ikon.kosong}<div>${esc(e && e.message || 'Gagal memuat data')}</div><button type="button" class="tombol halus" style="margin-top:12px" onclick="App.buka('monitoring')">Coba lagi</button></div>`;
   }
 
   function terima(d) {
     DATA = d;
     setSibuk(false);
+    if (App.state.aktif !== 'monitoring') return; // pengguna sudah pindah halaman
     const open = d.rows.filter(r => !r.selesai).length;
     if (ui) ui.setSub(`${d.update || 'Belum sync'} · ${open} PO open · ${d.rows.length - open} selesai`);
     gambarSemua();
