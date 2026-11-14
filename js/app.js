@@ -43,6 +43,7 @@ window.App = (function () {
       state.token = cred;
       state.tokenExp = (payload.exp || 0) * 1000;
       state.email = email;
+      state.nama = String(payload.name || '').trim();
       sessionStorage.setItem('snd_token', cred);
       return true;
     } catch (e) { return false; }
@@ -219,7 +220,7 @@ window.App = (function () {
 
   function gambarPengguna() {
     $('avatarSamping').textContent = inisial(state.email);
-    $('namaSamping').textContent = state.email ? namaDariEmail(state.email) : 'Tim SND';
+    $('namaSamping').textContent = state.nama || (state.email ? namaDariEmail(state.email) : 'Tim SND');
     $('emailSamping').textContent = state.email || CFG.domain;
   }
 

@@ -4,11 +4,12 @@
 
   function sapaan() {
     const j = new Date().getHours();
-    return j < 11 ? 'Selamat pagi' : j < 15 ? 'Selamat siang' : j < 18 ? 'Selamat sore' : 'Selamat malam';
+    return j < 4 ? 'Selamat malam' : j < 11 ? 'Selamat pagi' : j < 15 ? 'Selamat siang' : j < 18 ? 'Selamat sore' : 'Selamat malam';
   }
 
   function render(el, ui) {
-    const nama = state.email ? state.email.split('@')[0].split(/[._-]/)[0] : '';
+    const dariEmail = state.email ? state.email.split('@')[0].split(/[._-]/)[0] : '';
+    const nama = state.nama ? state.nama.split(/\s+/)[0] : dariEmail;
     const sebut = nama ? nama[0].toUpperCase() + nama.slice(1) : 'tim SND';
     ui.setSub('Workspace Supply & Demand');
     const fitur = App.halaman().filter(h => h.id !== 'beranda');

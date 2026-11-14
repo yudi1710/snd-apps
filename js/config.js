@@ -6,5 +6,5 @@ window.SND_CONFIG = {
   clientId: '616960285379-9cgqpk3bc4lqd6q11eumg819reihvtvi.apps.googleusercontent.com',
   // Hanya akun domain ini yang boleh masuk (dicek di browser DAN di server).
   domain: 'otoklix.com',
-  versi: '2026.11.14h',
+  versi: '2026.11.15a',
 };
