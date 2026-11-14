@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "me.ryukakirin.snd",
+      "sha256_cert_fingerprints": ["F0:CD:B9:5D:67:DA:25:AC:0C:EF:B1:49:2B:79:86:49:B6:A8:EF:9F:16:26:B6:1F:CE:FD:D9:3F:58:F0:71:D4"]
+    }
+  }
+]
