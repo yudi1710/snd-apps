@@ -5,7 +5,7 @@
  */
 (function () {
   const { api, toast, sheet, esc, angka, ikon, $ } = App;
-  const C = 0, K = 1, D = 2, AW = 3, IN = 4, OUT = 5, DMG = 6, BAL = 7, AREA = 8, MODEL = 9, URL = 10;
+  const C = 0, K = 1, D = 2, AW = 3, IN = 4, OUT = 5, DMG = 6, BAL = 7, AREA = 8, MODEL = 9, URL = 10, SV = 11, NSV = 12;
   let DATA = null; // { rows, cabang, gagal, update }
   let ui = null;
   let subTeks = '';
@@ -14,6 +14,11 @@
   const minus = r => r[BAL] < 0;
   const habis = r => r[BAL] === 0;
   const adaDmg = r => r[DMG] > 0;
+  // rekonsiliasi dengan stok Servia (ditarik Stock Bot tiap hari jam 12): SV = null kalau part tidak ketemu di Servia
+  const adaSv = r => r[SV] !== null && r[SV] !== undefined;
+  const selisih = r => adaSv(r) && r[BAL] !== r[SV];
+  const beda = r => r[BAL] - r[SV];
+  const fmtBeda = r => (beda(r) > 0 ? '+' : '') + angka(beda(r));
 
   // ---------- gabungan per kode ----------
   let gabungCache = null;
@@ -33,7 +38,8 @@
   // ---------- kerangka ----------
   function render(el, u) {
     ui = u;
-    u.setAksi(`<button type="button" class="tombol-ikon" id="btnMuat" title="Muat ulang dari sheet MRP">${ikon.sync}</button>`);
+    u.setAksi(`<button type="button" class="tombol-ikon" id="btnEkspor" title="Ekspor ke Excel">${ikon.unduh}</button>
+      <button type="button" class="tombol-ikon" id="btnMuat" title="Muat ulang dari sheet MRP">${ikon.sync}</button>`);
     el.innerHTML = `
       <section class="bagian kpi" id="kpi">${Array.from({ length: 6 }, () => '<div class="ubin"><div class="skeleton" style="width:70%"></div><div class="skeleton" style="height:28px;margin-top:8px;width:40%"></div></div>').join('')}</section>
       <section class="bagian kartu">
@@ -55,6 +61,7 @@
       <div class="teks-kecil" id="ringkas" style="margin:10px 2px 8px"></div>
       <div class="daftar" id="daftar">${Array.from({ length: 6 }, () => '<div class="po"><div class="skeleton" style="width:55%"></div><div class="skeleton" style="width:80%;margin-top:8px"></div><div class="skeleton" style="height:10px;margin-top:14px"></div></div>').join('')}</div>`;
 
+    $('btnEkspor').addEventListener('click', ekspor);
     $('btnMuat').addEventListener('click', () => muat(true));
     $('segTampil').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { F.tampil = b.dataset.t; F.batas = 120; semua(); } });
     $('cari').addEventListener('input', e => { F.q = e.target.value.trim().toUpperCase(); F.batas = 120; daftar(); });
@@ -67,6 +74,8 @@
       if (k && k.dataset.kode) detail(k.dataset.kode);
     });
 
+    const awal = App.state.awal; // filter dari kartu ringkasan di Beranda
+    if (awal && awal.halaman === 'ks') { F.kpi = awal.kpi || ''; F.cabang = ''; F.tampil = 'gabungan'; App.state.awal = null; }
     if (DATA) { ui.setSub(subTeks); semua(); } else muat(false);
   }
 
@@ -74,9 +83,9 @@
     const b = $('btnMuat');
     if (b) b.disabled = true;
     if (paksa) toast('Membaca tab KS semua cabang…');
-    api('getDataKS').then(d => {
+    App.ambil('getDataKS', paksa ? 0 : 120000).then(d => {
       DATA = d; gabungCache = null;
-      subTeks = `${d.update} · ${angka(d.rows.length)} baris · ${d.cabang.length} cabang`;
+      subTeks = `${d.update} · ${angka(d.rows.length)} baris · ${d.cabang.length} cabang · Servia: ${d.updateServia || 'belum ada data (bot sync jam 12:00)'}${d.offlineSejak ? ' · OFFLINE' : ''}`;
       if (App.state.aktif !== 'ks') return; // pengguna sudah pindah halaman
       if (b) b.disabled = false;
       ui.setSub(subTeks);
@@ -109,8 +118,8 @@
       ['habis', 'Balance 0', r.filter(habis).length, 'oranye'],
       ['minus', 'Balance Minus', r.filter(minus).length, 'merah'],
       ['dmg', 'Ada Damage', r.filter(adaDmg).length, 'merah'],
+      ['selisih', 'Selisih vs Servia', r.filter(selisih).length, 'oranye'],
       ['bal', 'Total Balance (pcs)', r.reduce((a, x) => a + x[BAL], 0), ''],
-      ['out', 'Total Outgoing (pcs)', r.reduce((a, x) => a + x[OUT], 0), ''],
     ];
     $('kpi').innerHTML = u.map(([id, l, n, w]) => `<div class="ubin ${F.kpi === id ? 'aktif' : ''}" data-k="${id}"><div class="label">${esc(l)}</div><div class="nilai ${n && w ? w : ''}">${angka(n)}</div></div>`).join('');
   }
@@ -123,7 +132,7 @@
   }
 
   const cocok = teks => !F.q || teks.toUpperCase().includes(F.q);
-  const lolosKpi = r => (F.kpi === 'habis' ? habis(r) : F.kpi === 'minus' ? minus(r) : F.kpi === 'dmg' ? adaDmg(r) : true);
+  const lolosKpi = r => (F.kpi === 'habis' ? habis(r) : F.kpi === 'minus' ? minus(r) : F.kpi === 'dmg' ? adaDmg(r) : F.kpi === 'selisih' ? selisih(r) : true);
 
   function urut(a, b) {
     switch (F.urut) {
@@ -146,7 +155,7 @@
         .map(r => ({ kode: r[K], desc: r[D], balance: r[BAL], keluar: r[OUT], baris: [r] }));
     }
     item.sort(urut);
-    const filterAktif = ['habis', 'minus', 'dmg'].includes(F.kpi);
+    const filterAktif = ['habis', 'minus', 'dmg', 'selisih'].includes(F.kpi);
     $('ringkas').textContent = `${angka(item.length)} ${F.tampil === 'gabungan' ? 'kode part' : 'baris'}${F.cabang ? ' · ' + F.cabang : ''}${filterAktif ? ' · filter aktif' : ''}`;
     if (!item.length) {
       $('daftar').innerHTML = `<div class="kosong" style="grid-column:1/-1">${ikon.kosong}<div>Tidak ada part yang cocok.</div></div>`;
@@ -160,8 +169,8 @@
     const tanda = g.balance < 0 ? 'merah' : g.balance === 0 ? '' : 'hijau';
     const r0 = g.baris[0];
     const rinci = F.tampil === 'gabungan'
-      ? `<div class="rincian">${g.baris.slice().sort((a, b) => a[C].localeCompare(b[C])).map(r => `<span class="badge ${r[BAL] < 0 ? 'merah' : r[BAL] === 0 ? 'abu' : ''}">${esc(r[C])} <b>${angka(r[BAL])}</b></span>`).join('')}</div>`
-      : `<div class="rincian"><span class="badge abu">${esc(r0[C])}</span><span class="badge">Awal ${angka(r0[AW])}</span><span class="badge">In ${angka(r0[IN])}</span><span class="badge">Out ${angka(r0[OUT])}</span>${r0[DMG] ? `<span class="badge merah">Damage ${angka(r0[DMG])}</span>` : ''}${r0[AREA] ? `<span class="badge abu">📍 ${esc(r0[AREA])}</span>` : ''}</div>`;
+      ? `<div class="rincian">${g.baris.slice().sort((a, b) => a[C].localeCompare(b[C])).map(r => `<span class="badge ${selisih(r) ? 'oranye' : r[BAL] < 0 ? 'merah' : r[BAL] === 0 ? 'abu' : ''}" ${selisih(r) ? `title="Servia ${angka(r[SV])}"` : ''}>${esc(r[C])} <b>${angka(r[BAL])}</b>${selisih(r) ? ` ≠ ${angka(r[SV])}` : ''}</span>`).join('')}</div>`
+      : `<div class="rincian"><span class="badge abu">${esc(r0[C])}</span><span class="badge">Awal ${angka(r0[AW])}</span><span class="badge">In ${angka(r0[IN])}</span><span class="badge">Out ${angka(r0[OUT])}</span>${r0[DMG] ? `<span class="badge merah">Damage ${angka(r0[DMG])}</span>` : ''}${adaSv(r0) ? `<span class="badge ${selisih(r0) ? 'oranye' : 'hijau'}">Servia ${angka(r0[SV])}${selisih(r0) ? ` (selisih ${fmtBeda(r0)})` : ' ✓'}</span>` : ''}${r0[AREA] ? `<span class="badge abu">📍 ${esc(r0[AREA])}</span>` : ''}</div>`;
     return `<article class="po" data-kode="${esc(g.kode)}">
       <div class="po-atas">
         <div style="min-width:0"><div class="kunci">${esc(g.kode)}</div><div class="po-meta">${esc(g.desc || '-')}</div></div>
@@ -178,12 +187,25 @@
       ${baris[0][MODEL] ? `<div class="detail-baris"><span>Model</span><span>${esc(baris[0][MODEL])}</span></div>` : ''}
       <div class="detail-baris"><span>Total balance</span><span>${angka(tot(BAL))} pcs</span></div>
       <div class="pemisah"></div>
-      <div class="gulir-x"><table class="tabel-ks"><thead><tr><th>Cabang</th><th class="angka">Awal</th><th class="angka">In</th><th class="angka">Out</th><th class="angka">Dmg</th><th class="angka">Balance</th></tr></thead><tbody>
-        ${baris.map(r => `<tr class="${r[BAL] < 0 ? 'minus' : r[BAL] === 0 ? 'habis' : ''}"><td>${esc(r[C])}${r[AREA] ? `<div class="teks-kecil">📍 ${esc(r[AREA])}</div>` : ''}</td><td class="angka">${angka(r[AW])}</td><td class="angka">${angka(r[IN])}</td><td class="angka">${angka(r[OUT])}</td><td class="angka">${angka(r[DMG])}</td><td class="angka"><b>${angka(r[BAL])}</b></td></tr>`).join('')}
-        <tr><td><b>Total</b></td><td class="angka"><b>${angka(tot(AW))}</b></td><td class="angka"><b>${angka(tot(IN))}</b></td><td class="angka"><b>${angka(tot(OUT))}</b></td><td class="angka"><b>${angka(tot(DMG))}</b></td><td class="angka"><b>${angka(tot(BAL))}</b></td></tr>
+      <div class="gulir-x"><table class="tabel-ks"><thead><tr><th>Cabang</th><th class="angka">Awal</th><th class="angka">In</th><th class="angka">Out</th><th class="angka">Dmg</th><th class="angka">Balance</th><th class="angka">Servia</th><th class="angka">Selisih</th></tr></thead><tbody>
+        ${baris.map(r => `<tr class="${r[BAL] < 0 ? 'minus' : r[BAL] === 0 ? 'habis' : ''}"><td>${esc(r[C])}${r[AREA] ? `<div class="teks-kecil">📍 ${esc(r[AREA])}</div>` : ''}</td><td class="angka">${angka(r[AW])}</td><td class="angka">${angka(r[IN])}</td><td class="angka">${angka(r[OUT])}</td><td class="angka">${angka(r[DMG])}</td><td class="angka"><b>${angka(r[BAL])}</b></td><td class="angka">${adaSv(r) ? angka(r[SV]) + (r[NSV] > 1 ? ` <span title="${r[NSV]} produk dengan kode sama di Servia">⚠</span>` : '') : '—'}</td><td class="angka ${selisih(r) ? 'selisih' : ''}">${adaSv(r) ? (selisih(r) ? fmtBeda(r) : '✓') : '—'}</td></tr>`).join('')}
+        <tr><td><b>Total</b></td><td class="angka"><b>${angka(tot(AW))}</b></td><td class="angka"><b>${angka(tot(IN))}</b></td><td class="angka"><b>${angka(tot(OUT))}</b></td><td class="angka"><b>${angka(tot(DMG))}</b></td><td class="angka"><b>${angka(tot(BAL))}</b></td><td class="angka"><b>${angka(baris.reduce((a, r) => a + (adaSv(r) ? r[SV] : 0), 0))}</b></td><td></td></tr>
       </tbody></table></div>
       <div class="pemisah"></div>
       <div class="po-bawah">${baris.map(r => (r[URL] ? `<a class="badge" href="${esc(r[URL])}" target="_blank" rel="noopener">Buka sheet ${esc(r[C])}</a>` : '')).join('')}</div>`);
+  }
+
+  // ---------- ekspor Excel (per baris cabang, sesuai filter aktif) ----------
+  function ekspor() {
+    if (!DATA || !window.Ekspor) return;
+    const baris = dasar().filter(lolosKpi).filter(r => cocok(r[K] + ' ' + r[D])).sort((a, b) => String(a[K]).localeCompare(String(b[K])) || a[C].localeCompare(b[C]));
+    if (!baris.length) { toast('Tidak ada data untuk diekspor.', true); return; }
+    Ekspor.unduh(Ekspor.namaDenganTanggal('snd-kartu-stok'), [{
+      nama: 'KS',
+      kolom: ['Cabang', 'Kode Part', 'Deskripsi', 'Stock Awal', 'Incoming', 'Outgoing', 'Damage', 'Balance', 'Stok Servia', 'Selisih (KS - Servia)', 'Jumlah Produk Servia', 'Area', 'Model'],
+      baris: baris.map(r => [r[C], r[K], r[D], r[AW], r[IN], r[OUT], r[DMG], r[BAL], adaSv(r) ? r[SV] : '', adaSv(r) ? beda(r) : '', adaSv(r) ? r[NSV] : '', r[AREA], r[MODEL]]),
+    }]);
+    toast(`Mengunduh ${angka(baris.length)} baris KS ke Excel…`);
   }
 
   App.daftar({

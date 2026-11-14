@@ -7,7 +7,7 @@
 window.App = (function () {
   const CFG = window.SND_CONFIG || {};
   const halaman = [];
-  const state = { aktif: null, email: '', konteks: null, token: '', tokenExp: 0, bukaPO: '' };
+  const state = { aktif: null, email: '', konteks: null, token: '', tokenExp: 0, bukaPO: '', awal: null };
   const memo = {};
   const $ = id => document.getElementById(id);
 
@@ -31,6 +31,7 @@ window.App = (function () {
     beranda: '<svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/></svg>',
     kartu: '<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
     lonceng: '<svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 21h4"/></svg>',
+    unduh: '<svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg>',
     keluar: '<svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3M13 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg>',
   };
 
@@ -91,6 +92,7 @@ window.App = (function () {
     sessionStorage.removeItem('snd_token');
     state.token = ''; state.tokenExp = 0; state.email = '';
     Object.keys(memo).forEach(k => delete memo[k]);
+    try { Object.keys(localStorage).filter(k => k.startsWith('snd_c_')).forEach(k => localStorage.removeItem(k)); } catch (e) {} // hapus cache offline milik akun ini
     try { google.accounts.id.disableAutoSelect(); } catch (e) {}
     if (tampilkanLogin !== false) tampilLogin('Kamu sudah keluar.');
   }
@@ -108,8 +110,15 @@ window.App = (function () {
   /** api('getDataApp', ...args) -> POST text/plain ke Apps Script (tanpa preflight CORS). */
   async function api(aksi, ...args) {
     const token = await pastikanToken();
-    const res = await fetch(CFG.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ token, aksi, args }), redirect: 'follow' });
-    const teks = await res.text();
+    let teks;
+    try {
+      const res = await fetch(CFG.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ token, aksi, args }), redirect: 'follow' });
+      teks = await res.text();
+    } catch (e) {
+      const err = new Error('Tidak ada koneksi ke server.');
+      err.jaringan = true; // dipakai untuk jatuh ke data offline
+      throw err;
+    }
     let j;
     try { j = JSON.parse(teks); } catch (e) { throw new Error('Jawaban server tidak dikenal (cek URL API).'); }
     if (j.error) {
@@ -119,19 +128,41 @@ window.App = (function () {
     return j.data;
   }
 
+  // ---------- cache offline (localStorage, per akun) ----------
+  const cacheKey = aksi => 'snd_c_' + aksi;
+  function simpanCache(aksi, d) {
+    try { localStorage.setItem(cacheKey(aksi), JSON.stringify({ t: Date.now(), u: state.email, d })); }
+    catch (e) { try { localStorage.removeItem(cacheKey(aksi)); } catch (e2) {} } // kuota penuh: buang saja
+  }
+  function bacaCache(aksi) {
+    try {
+      const j = JSON.parse(localStorage.getItem(cacheKey(aksi)) || 'null');
+      return j && j.d && j.u === state.email ? j : null;
+    } catch (e) { return null; }
+  }
+  const jamCache = t => new Date(t).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
   // ---------- cache data bersama (dipakai halaman & notifikasi) ----------
   function kabari(aksi, data) { window.dispatchEvent(new CustomEvent('snd:data', { detail: { aksi, data } })); }
   /** Ambil data dengan cache ttl ms; panggilan serentak berbagi satu request. */
   function ambil(aksi, ttl, ...args) {
     const m = memo[aksi];
     if (m && ttl > 0 && Date.now() - m.t < ttl) return m.p;
-    const p = api(aksi, ...args).then(d => { memo[aksi] = { t: Date.now(), p: Promise.resolve(d) }; kabari(aksi, d); return d; })
-      .catch(e => { delete memo[aksi]; throw e; });
+    const p = api(aksi, ...args).then(d => { memo[aksi] = { t: Date.now(), p: Promise.resolve(d) }; simpanCache(aksi, d); kabari(aksi, d); return d; })
+      .catch(e => {
+        delete memo[aksi];
+        const c = e.jaringan ? bacaCache(aksi) : null;
+        if (!c) throw e;
+        // offline: tampilkan data terakhir yang tersimpan di perangkat
+        const d = Object.assign({}, c.d, { offlineSejak: c.t });
+        toast('Offline — menampilkan data terakhir (' + jamCache(c.t) + ')', true);
+        return d;
+      });
     memo[aksi] = { t: Date.now(), p };
     return p;
   }
   /** Simpan hasil terbaru (mis. setelah sync/simpan) ke cache bersama. */
-  function isi(aksi, data) { memo[aksi] = { t: Date.now(), p: Promise.resolve(data) }; kabari(aksi, data); }
+  function isi(aksi, data) { memo[aksi] = { t: Date.now(), p: Promise.resolve(data) }; simpanCache(aksi, data); kabari(aksi, data); }
 
   // ---------- toast ----------
   let toastTimer = null;

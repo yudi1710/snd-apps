@@ -1,7 +1,8 @@
-/* Service worker SND Apps: cache kerangka app (app shell) supaya buka cepat & bisa di-install.
-   Data selalu diambil dari server (tidak di-cache). Naikkan VERSI tiap rilis supaya cache lama dibuang. */
-const VERSI = 'snd-apps-2026.11.15b';
-const SHELL = ['./', './index.html', './css/app.css', './js/config.js', './js/app.js', './js/page-beranda.js', './js/page-monitoring.js', './js/page-ks.js', './js/notif.js',
+/* Service worker SND Apps: cache kerangka app (app shell) supaya buka cepat & bisa di-install,
+   plus penerima Web Push (notifikasi PO dari Stock Bot).
+   Data selalu diambil dari server (tidak di-cache di sini; cache offline data ada di aplikasi). Naikkan VERSI tiap rilis. */
+const VERSI = 'snd-apps-2026.11.15c';
+const SHELL = ['./', './index.html', './css/app.css', './js/config.js', './js/app.js', './js/ekspor.js', './js/page-beranda.js', './js/page-monitoring.js', './js/page-ks.js', './js/notif.js',
   './manifest.webmanifest', './icons/favicon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
@@ -23,4 +24,31 @@ self.addEventListener('fetch', e => {
       return res;
     }).catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
   );
+});
+
+// ---------- Web Push ----------
+// Payload JSON dari bot: { title, body, url, tag }
+self.addEventListener('push', e => {
+  let p = {};
+  try { p = e.data ? e.data.json() : {}; } catch (err) { p = { body: e.data ? e.data.text() : '' }; }
+  const judul = p.title || 'SND Apps';
+  e.waitUntil(self.registration.showNotification(judul, {
+    body: p.body || '',
+    icon: './icons/icon-192.png',
+    badge: './icons/icon-192.png',
+    tag: p.tag || 'snd',
+    renotify: true,
+    lang: 'id',
+    data: { url: p.url || '/' },
+  }));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const tujuan = new URL((e.notification.data && e.notification.data.url) || '/', self.location.origin).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(daftar => {
+    const ada = daftar.find(c => c.url.startsWith(self.location.origin));
+    if (ada) { return ada.focus().then(c => (c && 'navigate' in c ? c.navigate(tujuan).catch(() => {}) : null)); }
+    return self.clients.openWindow(tujuan);
+  }));
 });

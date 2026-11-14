@@ -27,7 +27,8 @@
   // ---------- render kerangka halaman ----------
   function render(el, u) {
     ui = u;
-    u.setAksi(`<button type="button" class="tombol-ikon" id="btnSync" title="Sync dari sheet MRP">${ikon.sync}</button>
+    u.setAksi(`<button type="button" class="tombol-ikon" id="btnEkspor" title="Ekspor ke Excel">${ikon.unduh}</button>
+      <button type="button" class="tombol-ikon" id="btnSync" title="Sync dari sheet MRP">${ikon.sync}</button>
       <button type="button" class="tombol oranye hanya-desktop" id="btnSyncTeks">${ikon.sync}<span>Sync sekarang</span></button>`);
     el.innerHTML = `
       <section class="bagian kpi" id="kpi">${Array.from({ length: 6 }, () => '<div class="ubin"><div class="skeleton" style="width:70%"></div><div class="skeleton" style="height:28px;margin-top:8px;width:40%"></div></div>').join('')}</section>
@@ -60,6 +61,7 @@
         </aside>
       </div>`;
 
+    $('btnEkspor').addEventListener('click', ekspor);
     $('btnSync').addEventListener('click', sync);
     $('btnSyncTeks').addEventListener('click', sync);
     $('segMode').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; F.mode = b.dataset.mode; F.kpi = ''; gambarSemua(); });
@@ -69,6 +71,8 @@
     $('kpi').addEventListener('click', e => { const u = e.target.closest('.ubin'); if (!u || !u.dataset.kpi) return; F.kpi = F.kpi === u.dataset.kpi ? '' : u.dataset.kpi; if (F.kpi && F.mode === 'selesai') F.mode = 'open'; gambarSemua(); });
     $('daftar').addEventListener('click', e => { const k = e.target.closest('.po'); if (k) bukaDetail(k.dataset.key); });
 
+    const awal = App.state.awal; // filter dari kartu ringkasan di Beranda
+    if (awal && awal.halaman === 'monitoring') { F.kpi = awal.kpi || ''; F.mode = 'open'; F.cabang = ''; App.state.awal = null; }
     if (dimuat) terima(DATA); else muat();
   }
 
@@ -97,7 +101,7 @@
     setSibuk(false);
     if (App.state.aktif !== 'monitoring') return; // pengguna sudah pindah halaman
     const open = d.rows.filter(r => !r.selesai).length;
-    if (ui) ui.setSub(`${d.update || 'Belum sync'} · ${open} PO open · ${d.rows.length - open} selesai`);
+    if (ui) ui.setSub(`${d.update || 'Belum sync'} · ${open} PO open · ${d.rows.length - open} selesai${d.offlineSejak ? ' · OFFLINE' : ''}`);
     gambarSemua();
     if (App.state.bukaPO) { const k = App.state.bukaPO; App.state.bukaPO = ''; bukaDetail(k); } // dibuka dari notifikasi
   }
@@ -174,6 +178,7 @@
       case 'nol': return nol(r);
       case 'partial': return !r.selesai && !nol(r);
       case 'telat': return telat(r);
+      case 'tertunda': return !r.selesai && r.aging !== null && r.aging >= DATA.batas;
       case 'noeta': return !r.selesai && !adaEta(r);
       case 'lewat': return etaLewat(r);
       case 'open': return !r.selesai;
@@ -244,9 +249,38 @@
       <div class="pemisah"></div>
       <h3 style="font-size:13px;margin-bottom:8px">Item (${r.items.length})</h3>
       <table class="tabel-item"><thead><tr><th>Part</th><th class="angka">Terima / Order</th><th class="angka">Sisa</th></tr></thead><tbody>${baris || '<tr><td colspan="3" class="teks-kecil">Detail item belum tersedia, klik Sync.</td></tr>'}</tbody></table>
-      ${form}`);
+      ${form}
+      <div class="pemisah"></div>
+      <h3 style="font-size:13px;margin-bottom:8px">Riwayat ETA & catatan</h3>
+      <div id="riwayat" class="teks-kecil">Memuat…</div>`);
     const btn = $('btnSimpan');
     if (btn) btn.addEventListener('click', () => simpan(r.key));
+    api('getRiwayat', r.key).then(gambarRiwayat).catch(() => { const el = $('riwayat'); if (el) el.textContent = 'Riwayat tidak bisa dimuat (offline?).'; });
+  }
+
+  function gambarRiwayat(list) {
+    const el = $('riwayat');
+    if (!el) return;
+    if (!list || !list.length) { el.textContent = 'Belum ada perubahan.'; return; }
+    const tgl = t => (t ? tanggal(t) : '—');
+    el.innerHTML = list.map(x => `<div class="riwayat-item"><div class="riwayat-waktu">${esc(x.waktu)} · ${esc(String(x.email || '').split('@')[0])}</div>` +
+      (x.etaLama !== x.etaBaru ? `<div>ETA: ${esc(tgl(x.etaLama))} → <b>${esc(tgl(x.etaBaru))}</b></div>` : '') +
+      (x.catLama !== x.catBaru ? `<div>Catatan: ${esc(x.catLama || '—')} → <b>${esc(x.catBaru || '—')}</b></div>` : '') + '</div>').join('');
+  }
+
+  // ---------- ekspor Excel (sesuai filter yang sedang aktif) ----------
+  function ekspor() {
+    if (!window.Ekspor) return;
+    const baris = dasar().filter(lolos).sort(urutkan);
+    if (!baris.length) { toast('Tidak ada data untuk diekspor.', true); return; }
+    const sv = r => serviaInfo(r).teks.replace('Servia: ', '');
+    Ekspor.unduh(Ekspor.namaDenganTanggal('snd-monitoring-po'), [
+      { nama: 'PO', kolom: ['Cabang', 'No PO', 'Tgl PO', 'Umur (hari)', 'Jumlah Item', 'Qty Order', 'Qty Received', 'Sisa', 'Status', 'ETA', 'Catatan', 'Status Servia'],
+        baris: baris.map(r => [r.cabang, r.po, r.tglPO, r.aging === null ? '' : r.aging, r.items.length, r.order, r.recv, Math.max(0, r.order - r.recv), r.status, r.etaInput || r.etaText || '', r.catatan || '', sv(r)]) },
+      { nama: 'Item', kolom: ['Cabang', 'No PO', 'Kode Part', 'Deskripsi', 'Qty Order', 'Qty Received', 'Sisa'],
+        baris: baris.flatMap(r => r.items.map(it => [r.cabang, r.po, it.kode, it.desc, it.order, it.recv, Math.max(0, it.order - it.recv)])) },
+    ]);
+    toast(`Mengunduh ${angka(baris.length)} PO ke Excel…`);
   }
 
   function simpan(key) {
