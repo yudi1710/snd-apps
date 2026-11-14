@@ -256,5 +256,5 @@
       .catch(e => { btn.disabled = false; toast(e.message || 'Gagal menyimpan.', true); });
   }
 
-  App.daftar({ id: 'monitoring', label: 'Monitoring MRP', ikon: 'monitor', render });
+  App.daftar({ id: 'monitoring', label: 'Monitoring MRP PO', ikon: 'monitor', render });
 })();
