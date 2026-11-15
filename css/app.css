@@ -372,3 +372,9 @@ button.notif { font: inherit; color: inherit; }
 .po > *, .po-info, .po-prog { min-width: 0; }
 .input, select.input { max-width: 100%; }
 .input { text-overflow: ellipsis; }
+
+/* Cari Part & Transfer */
+.input-cari.besar .input { min-height: 44px; font-size: 15px; padding-left: 38px; }
+.input-cari.besar svg { left: 12px; width: 18px; height: 18px; }
+.daftar-saran { margin: 6px 0 10px; padding-left: 18px; }
+.daftar-saran li { margin: 4px 0; }

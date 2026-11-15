@@ -130,7 +130,7 @@
       ['minus', 'Balance minus', r.filter(minus).length, 'merah'],
       ['dmg', 'Ada damage', r.filter(adaDmg).length, 'merah'],
       ['selisih', 'Selisih vs Servia', r.filter(selisih).length, 'oranye'],
-      ['bal', 'Total balance (pcs)', r.reduce((a, x) => a + x[BAL], 0), ''],
+      ['belumsv', 'Belum ada di Servia', DATA.updateServia ? r.filter(x => !adaSv(x)).length : 0, 'oranye'],
     ];
     $('kpi').innerHTML = u.map(([id, l, n, w]) =>
       `<button type="button" class="ubin ${F.kpi === id ? 'aktif' : ''}" data-k="${id}" aria-pressed="${F.kpi === id}"><span class="label">${esc(l)}</span><span class="nilai">${angka(n)}</span>${n && w ? `<span class="penanda ${w}"><span class="sr">, perlu perhatian</span></span>` : ''}</button>`).join('');
@@ -144,7 +144,7 @@
   }
 
   const cocok = teks => !F.q || teks.toUpperCase().includes(F.q);
-  const lolosKpi = r => (F.kpi === 'habis' ? habis(r) : F.kpi === 'minus' ? minus(r) : F.kpi === 'dmg' ? adaDmg(r) : F.kpi === 'selisih' ? selisih(r) : true);
+  const lolosKpi = r => (F.kpi === 'habis' ? habis(r) : F.kpi === 'minus' ? minus(r) : F.kpi === 'dmg' ? adaDmg(r) : F.kpi === 'selisih' ? selisih(r) : F.kpi === 'belumsv' ? !adaSv(r) : true);
 
   function urut(a, b) {
     switch (F.urut) {
@@ -167,7 +167,7 @@
         .map(r => ({ kode: r[K], desc: r[D], balance: r[BAL], keluar: r[OUT], baris: [r] }));
     }
     item.sort(urut);
-    const filterAktif = ['habis', 'minus', 'dmg', 'selisih'].includes(F.kpi);
+    const filterAktif = ['habis', 'minus', 'dmg', 'selisih', 'belumsv'].includes(F.kpi);
     $('ringkas').textContent = `${angka(item.length)} ${F.tampil === 'gabungan' ? 'kode part' : 'baris'}${F.cabang ? ' · ' + F.cabang : ''}${filterAktif ? ' · filter aktif' : ''}${F.q ? ' · “' + F.q + '”' : ''}`;
     if (!item.length) {
       $('daftar').innerHTML = `<div class="kosong">${ikon.kosong}<div>Tidak ada part yang cocok dengan filter ini.</div></div>`;
