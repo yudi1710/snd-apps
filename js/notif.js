@@ -19,7 +19,7 @@
   function hitung(d) {
     const batas = d.batas || 3;
     const hasil = [];
-    d.rows.filter(r => !r.selesai).forEach(r => {
+    (d.rows || []).filter(r => !r.selesai).forEach(r => {
       if (r.aging !== null && r.aging >= batas) hasil.push({ id: `rem|${r.key}|${Math.floor(r.aging / batas)}`, jenis: 'reminder', r });
       if (r.etaInput && r.etaInput < d.today) hasil.push({ id: `eta|${r.key}|${r.etaInput}`, jenis: 'eta', r });
     });
