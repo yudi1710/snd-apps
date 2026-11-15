@@ -102,7 +102,7 @@ window.App = (function () {
       google.accounts.id.initialize({
         client_id: CFG.clientId,
         hd: CFG.domain,
-        auto_select: true,
+        auto_select: false, // jangan memilih akun otomatis: biarkan pengguna memilih (HP bisa punya beberapa akun @otoklix.com)
         itp_support: true,
         use_fedcm_for_prompt: true,
         use_fedcm_for_button: true, // tanpa popup (popup tidak jalan di APK/TWA, berakhir di about:blank)
@@ -115,7 +115,7 @@ window.App = (function () {
       wadah.innerHTML = '';
       google.accounts.id.renderButton(wadah, { theme: 'filled_blue', size: 'large', shape: 'pill', text: 'signin_with', width: Math.max(200, Math.min(360, Math.floor(wadah.clientWidth || 280))), locale: 'id', logo_alignment: 'left' });
     }
-    google.accounts.id.prompt();
+    // tanpa google.accounts.id.prompt(): One Tap otomatis menebak akun terakhir, di APK malah salah pilih akun
   }
 
   /** Berjalan sebagai app terinstal (APK/TWA atau PWA)? Di sana popup tidak bisa dipakai. */

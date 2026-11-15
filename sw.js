@@ -1,7 +1,7 @@
 /* Service worker SND Apps: cache kerangka app (app shell) supaya buka cepat & bisa di-install,
    plus penerima Web Push (notifikasi PO dari Stock Bot).
    Data selalu diambil dari server (tidak di-cache di sini; cache offline data ada di aplikasi). Naikkan VERSI tiap rilis. */
-const VERSI = 'snd-apps-2026.11.15h';
+const VERSI = 'snd-apps-2026.11.15i';
 const SHELL = ['./', './index.html', './css/app.css', './js/config.js', './js/app.js', './js/ekspor.js', './js/page-beranda.js', './js/page-monitoring.js', './js/page-ks.js', './js/notif.js',
   './manifest.webmanifest', './icons/favicon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png', './icons/apple-touch-icon.png'];
 
