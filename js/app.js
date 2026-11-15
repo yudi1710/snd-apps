@@ -52,6 +52,41 @@ window.App = (function () {
     } catch (e) { return false; }
   }
 
+  // ---------- login cadangan: halaman pilih akun Google (tanpa iframe) ----------
+  // Dipakai kalau tombol Google di dalam app tidak menampilkan akun yang sudah login di Chrome.
+  // Alur OIDC implicit: Google mengembalikan id_token di fragmen URL, nonce dicocokkan di sini.
+  function masukRedirect() {
+    const nonce = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now());
+    sessionStorage.setItem('snd_nonce', nonce);
+    location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
+      client_id: CFG.clientId,
+      redirect_uri: location.origin + '/',
+      response_type: 'id_token',
+      scope: 'openid email profile',
+      nonce,
+      prompt: 'select_account',
+      hd: CFG.domain,
+    });
+  }
+
+  /** Kalau halaman dibuka dari redirect Google (#id_token=...), ambil tokennya. */
+  function terimaRedirect() {
+    const m = location.hash.match(/[#&]id_token=([^&]+)/);
+    const galat = location.hash.match(/[#&]error=([^&]+)/);
+    if (!m && !galat) return false;
+    const bersih = () => { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} };
+    const nonceAsli = sessionStorage.getItem('snd_nonce');
+    sessionStorage.removeItem('snd_nonce');
+    bersih();
+    if (galat) { toast('Login dibatalkan atau ditolak Google (' + decodeURIComponent(galat[1]) + ').', true); return false; }
+    try {
+      const token = decodeURIComponent(m[1]);
+      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (!nonceAsli || payload.nonce !== nonceAsli) { toast('Login tidak valid (nonce berbeda), coba lagi.', true); return false; }
+      return simpanToken(token);
+    } catch (e) { return false; }
+  }
+
   function muatTokenTersimpan() {
     const t = sessionStorage.getItem('snd_token');
     if (t && simpanToken(t) && tokenValid()) return true;
@@ -298,7 +333,9 @@ window.App = (function () {
       $('loginPesan').textContent = 'Konfigurasi belum lengkap: isi apiUrl dan clientId di js/config.js.';
       return;
     }
-    if (muatTokenTersimpan()) setelahMasuk(); else tampilLogin('');
+    const alt = $('btnMasukAlt');
+    if (alt) alt.addEventListener('click', masukRedirect);
+    if (terimaRedirect() || muatTokenTersimpan()) setelahMasuk(); else tampilLogin('');
   }
 
   return { daftar, halaman: () => halaman, buka, mulai, api, ambil, isi, toast, sheet, keluar, esc, angka, rp, tanggal, hariAntara, ikon, state, $ };
