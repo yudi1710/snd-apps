@@ -16,7 +16,7 @@
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./css/app.css?v=2026.11.15i">
+<link rel="stylesheet" href="./css/app.css?v=2026.11.15j">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -35,6 +35,7 @@
     <div class="sidebar-kaki">
       <div class="avatar" id="avatarSamping"></div>
       <div class="pengguna"><div class="pengguna-nama" id="namaSamping"></div><div class="pengguna-email" id="emailSamping"></div></div>
+      <button class="tombol-ikon" id="btnKode" title="Kode masuk untuk perangkat lain" aria-label="Kode masuk untuk perangkat lain"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3M14 9l2 2"/></svg></button>
       <button class="tombol-ikon" id="btnKeluar" title="Keluar" aria-label="Keluar"><svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3M13 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg></button>
     </div>
     <div class="teks-kecil" id="versiApp" style="padding:8px 8px 0"></div>
@@ -67,6 +68,12 @@
     <p>Workspace tim Supply &amp; Demand Otoklix.<br>Masuk dengan akun <b>@otoklix.com</b>.</p>
     <div id="tombolGoogle" class="login-tombol"></div>
     <button type="button" class="login-alt" id="btnMasukAlt">Akun saya tidak muncul? Pilih akun lewat halaman Google</button>
+    <button type="button" class="login-tautan" id="btnKodeLogin">Punya kode masuk dari Chrome?</button>
+    <div class="login-kode" id="kotakKode" hidden>
+      <input class="input" id="inputKode" placeholder="XXXXX-XXXXX" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text">
+      <button type="button" class="tombol penuh" id="btnTukarKode">Masuk dengan kode</button>
+      <div class="teks-kecil" style="margin-top:6px">Buka SND Apps di Chrome, ketuk ikon kunci di menu samping untuk membuat kode.</div>
+    </div>
     <div class="teks-kecil" id="loginPesan"></div>
     <div class="catatan">Akses hanya untuk tim SND Otoklix</div>
   </div>
@@ -82,13 +89,13 @@
 </div>
 <div class="toast" id="toast" role="status"></div>
 
-<script src="./js/config.js?v=2026.11.15i"></script>
-<script src="./js/ekspor.js?v=2026.11.15i"></script>
-<script src="./js/app.js?v=2026.11.15i"></script>
-<script src="./js/page-beranda.js?v=2026.11.15i"></script>
-<script src="./js/page-monitoring.js?v=2026.11.15i"></script>
-<script src="./js/page-ks.js?v=2026.11.15i"></script>
-<script src="./js/notif.js?v=2026.11.15i"></script>
+<script src="./js/config.js?v=2026.11.15j"></script>
+<script src="./js/ekspor.js?v=2026.11.15j"></script>
+<script src="./js/app.js?v=2026.11.15j"></script>
+<script src="./js/page-beranda.js?v=2026.11.15j"></script>
+<script src="./js/page-monitoring.js?v=2026.11.15j"></script>
+<script src="./js/page-ks.js?v=2026.11.15j"></script>
+<script src="./js/notif.js?v=2026.11.15j"></script>
 <script>App.mulai();</script>
 </body>
 </html>

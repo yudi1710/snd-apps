@@ -198,10 +198,59 @@ window.App = (function () {
   /** Setelah login Google berhasil: minta server menerbitkan sesi 7 hari, simpan di perangkat. */
   function buatSesiBaru() {
     if (sesiValid() || !tokenValid()) return;
-    panggil({ token: state.token }, 'buatSesi', []).then(s => {
-      state.sesi = s.sesi; state.sesiExp = s.exp;
-      try { localStorage.setItem(SESI_KEY, JSON.stringify({ sesi: s.sesi, exp: s.exp, email: s.email, nama: s.nama })); } catch (e) {}
-    }).catch(() => { /* sesi opsional: kalau gagal, tetap jalan dengan token Google */ });
+    panggil({ token: state.token }, 'buatSesi', []).then(simpanSesi)
+      .catch(() => { /* sesi opsional: kalau gagal, tetap jalan dengan token Google */ });
+  }
+
+  function simpanSesi(s) {
+    state.sesi = s.sesi; state.sesiExp = s.exp;
+    try { localStorage.setItem(SESI_KEY, JSON.stringify({ sesi: s.sesi, exp: s.exp, email: s.email, nama: s.nama })); } catch (e) {}
+  }
+
+  // ---------- kode masuk sekali pakai: pindahkan login dari Chrome ke APK ----------
+  /** Di perangkat yang sudah login (Chrome): buat kode 5 menit. */
+  async function tampilKode() {
+    sheet.buka('Kode masuk untuk perangkat lain', '<div class="kosong" style="padding:24px">Membuat kode…</div>');
+    try {
+      const k = await api('buatKodeMasuk');
+      const habis = Date.now() + k.berlakuDetik * 1000;
+      sheet.badan().innerHTML = `
+        <div class="teks-kecil" style="margin-bottom:10px">Di perangkat lain (mis. APK), pilih <b>"Punya kode masuk dari Chrome?"</b> lalu ketik kode ini. Berlaku 5 menit dan hanya bisa dipakai sekali.</div>
+        <div class="kode-besar" id="kodeBesar">${esc(k.kode)}</div>
+        <div class="teks-kecil" id="kodeSisa" style="text-align:center;margin:8px 0 14px"></div>
+        <button type="button" class="tombol penuh" id="btnSalinKode">Salin kode</button>`;
+      const sisa = () => {
+        const d = Math.max(0, Math.round((habis - Date.now()) / 1000));
+        const el = document.getElementById('kodeSisa');
+        if (!el) return clearInterval(tm);
+        el.textContent = d ? `Berlaku ${Math.floor(d / 60)}:${String(d % 60).padStart(2, '0')} lagi` : 'Kode sudah habis. Tutup lalu buat kode baru.';
+      };
+      const tm = setInterval(sisa, 1000); sisa();
+      document.getElementById('btnSalinKode').addEventListener('click', () => {
+        (navigator.clipboard ? navigator.clipboard.writeText(k.kode) : Promise.reject()).then(() => toast('Kode disalin.'), () => toast('Salin manual: ' + k.kode));
+      });
+    } catch (e) {
+      sheet.badan().innerHTML = `<div class="kosong">${esc(e.message || 'Gagal membuat kode.')}</div>`;
+    }
+  }
+
+  /** Di perangkat yang belum login (APK): tukar kode dengan sesi 7 hari. */
+  async function tukarKodeMasuk() {
+    const kode = $('inputKode').value.trim();
+    if (kode.replace(/[^A-Za-z0-9]/g, '').length !== 10) { $('loginPesan').textContent = 'Kode terdiri dari 10 karakter (XXXXX-XXXXX).'; return; }
+    const b = $('btnTukarKode');
+    b.disabled = true;
+    $('loginPesan').textContent = 'Memeriksa kode…';
+    try {
+      const s = await panggil({}, 'tukarKode', [kode]);
+      simpanSesi(s);
+      state.email = s.email; state.nama = s.nama || '';
+      $('login').classList.remove('tampil');
+      setelahMasuk();
+    } catch (e) {
+      $('loginPesan').textContent = e.message || 'Kode ditolak.';
+    }
+    b.disabled = false;
   }
 
   // ---------- cache offline (localStorage, per akun) ----------
@@ -377,6 +426,10 @@ window.App = (function () {
     }
     const alt = $('btnMasukAlt');
     if (alt) alt.addEventListener('click', masukRedirect);
+    $('btnKode').addEventListener('click', () => { tutupLaci(); tampilKode(); });
+    $('btnKodeLogin').addEventListener('click', () => { const k = $('kotakKode'); k.hidden = !k.hidden; if (!k.hidden) $('inputKode').focus(); });
+    $('btnTukarKode').addEventListener('click', tukarKodeMasuk);
+    $('inputKode').addEventListener('keydown', e => { if (e.key === 'Enter') tukarKodeMasuk(); });
     if (terimaRedirect() || muatSesi() || muatTokenTersimpan()) setelahMasuk(); else tampilLogin('');
   }
 
