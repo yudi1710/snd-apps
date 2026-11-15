@@ -1,7 +1,7 @@
 /* Service worker SND Apps: cache kerangka app (app shell) supaya buka cepat & bisa di-install,
    plus penerima Web Push (notifikasi PO dari Stock Bot).
    Data selalu diambil dari server (tidak di-cache di sini; cache offline data ada di aplikasi). Naikkan VERSI tiap rilis. */
-const VERSI = 'snd-apps-2026.11.15k';
+const VERSI = 'snd-apps-2026.11.15l';
 const SHELL = ['./', './index.html', './css/app.css', './js/config.js', './js/app.js', './js/ekspor.js', './js/page-beranda.js', './js/page-monitoring.js', './js/page-ks.js', './js/notif.js',
   './manifest.webmanifest', './icons/favicon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png', './icons/apple-touch-icon.png'];
 
@@ -38,6 +38,8 @@ self.addEventListener('push', e => {
     badge: './icons/icon-192.png',
     tag: p.tag || 'snd',
     renotify: true,
+    vibrate: [200, 100, 200], // getar membantu notifikasi tampil sebagai popup di sebagian HP
+    requireInteraction: false,
     lang: 'id',
     data: { url: p.url || '/' },
   }));
