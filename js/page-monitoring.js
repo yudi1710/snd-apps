@@ -218,7 +218,7 @@
 
   function kartuPO(r) {
     const p = persen(r);
-    const kelasProgres = r.selesai ? 'penuh' : r.recv === 0 ? 'kosong' : '';
+    const kelasProgres = r.selesai ? 'penuh' : r.recv === 0 ? 'nol' : '';
     const status = r.selesai ? '<span class="badge hijau titik">Selesai</span>'
       : nol(r) ? '<span class="badge merah titik">Belum ada progres</span>' : '<span class="badge kuning titik">Sebagian</span>';
     const sv = serviaInfo(r);
@@ -226,7 +226,7 @@
       : `<span class="po-umur ${telat(r) ? 'telat' : r.aging > DATA.batas ? 'lama' : ''}">${r.aging} hari</span>`;
     const eta = r.selesai ? '<span class="po-eta"></span>'
       : r.etaInput ? `<span class="po-eta ${etaLewat(r) ? 'lewat' : ''}">${etaLewat(r) ? 'Lewat ' : 'ETA '}${tanggal(r.etaInput)}</span>`
-      : r.etaText ? `<span class="po-eta">ETA ${esc(r.etaText)}</span>` : '<span class="po-eta kosong">Belum ada ETA</span>';
+      : r.etaText ? `<span class="po-eta">ETA ${esc(r.etaText)}</span>` : '<span class="po-eta tanpa">Belum ada ETA</span>';
     return `<button type="button" class="po ${telat(r) ? 'telat' : ''} ${r.selesai ? 'selesai' : ''}" data-key="${esc(r.key)}">
       <span class="po-info"><span class="po-no">${esc(r.po)}</span><span class="po-meta">${esc(r.cabang)} · ${esc(r.tglPO || '-')} · ${r.items.length} item</span>${r.catatan ? `<span class="po-cat">Catatan: ${esc(r.catatan)}</span>` : ''}</span>
       ${umur}
@@ -244,7 +244,7 @@
     const form = r.selesai ? '' : `
       <div class="pemisah"></div>
       <div class="form-baris"><label class="label" for="fEta">ETA dari VinFast</label><input class="input" type="date" id="fEta" name="eta" autocomplete="off" value="${esc(r.etaInput)}">${r.etaText ? `<div class="teks-kecil" style="margin-top:4px">Teks lama: ${esc(r.etaText)}</div>` : ''}</div>
-      <div class="form-baris"><label class="label" for="fCatatan">Catatan follow-up</label><input class="input" type="text" id="fCatatan" name="catatan" maxlength="500" autocomplete="off" placeholder="mis. VinFast konfirmasi kirim bertahap…" value="${esc(r.catatan)}"></div>
+      <div class="form-baris"><label class="label" for="fCatatan">Catatan follow-up</label><input class="input" type="text" id="fCatatan" name="catatan" maxlength="500" autocomplete="off" placeholder="mis. kirim bertahap…" value="${esc(r.catatan)}"></div>
       <div class="form-baris"><button type="button" class="tombol penuh" id="btnSimpan">Simpan ETA & catatan</button></div>`;
     sheet.buka(esc(r.po), `
       <div class="detail-kepala">${r.selesai ? '<span class="badge hijau titik">Selesai</span>' : nol(r) ? '<span class="badge merah titik">Belum ada progres</span>' : '<span class="badge kuning titik">Sebagian</span>'}<span class="badge ${sv.kelas}">${esc(sv.teks)}</span>${telat(r) ? `<span class="badge merah titik">Lebih dari ${DATA.batas} hari tanpa progres</span>` : ''}</div>

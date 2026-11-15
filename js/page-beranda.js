@@ -60,7 +60,7 @@
       return `<button type="button" class="po ${r.aging >= 7 ? 'telat' : ''}" data-key="${esc(r.key)}">
         <span class="po-info"><span class="po-no">${esc(r.po)}</span><span class="po-meta">${esc(r.cabang)} · ${esc(eta)}</span></span>
         <span class="po-umur ${kelas}">${r.aging} hari</span>
-        <span class="po-prog"><span class="progres ${r.recv === 0 ? 'kosong' : ''}"><span style="width:${p}%"></span></span><span class="po-qty">${angka(r.recv)}/${angka(r.order)}</span></span>
+        <span class="po-prog"><span class="progres ${r.recv === 0 ? 'nol' : ''}"><span style="width:${p}%"></span></span><span class="po-qty">${angka(r.recv)}/${angka(r.order)}</span></span>
       </button>`;
     }).join('');
     el.querySelectorAll('.po').forEach(n => n.addEventListener('click', () => { state.bukaPO = n.dataset.key; App.buka('monitoring'); }));
