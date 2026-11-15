@@ -54,7 +54,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .appbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 8px; min-height: var(--appbar); padding: env(safe-area-inset-top) 12px 0 12px; background: var(--bg); border-bottom: 1px solid var(--line); }
 .appbar-judul { flex: 1; min-width: 0; }
 .appbar-judul h1 { font-size: 16px; line-height: 1.3; overflow-wrap: anywhere; }
-.appbar-sub { font-size: 12px; line-height: 1.35; color: var(--text-3); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.appbar-sub { font-size: 12px; line-height: 1.35; color: var(--text-3); overflow-wrap: anywhere; }
 .appbar-aksi { display: flex; gap: 4px; align-items: center; }
 .view { flex: 1; width: 100%; max-width: 1280px; margin: 0 auto; padding: 16px 16px calc(var(--bottomnav) + 20px); }
 .bagian + .bagian, .kartu + .kartu { margin-top: 16px; }
