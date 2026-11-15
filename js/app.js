@@ -7,7 +7,7 @@
 window.App = (function () {
   const CFG = window.SND_CONFIG || {};
   const halaman = [];
-  const state = { aktif: null, email: '', konteks: null, token: '', tokenExp: 0, bukaPO: '', awal: null };
+  const state = { aktif: null, email: '', konteks: null, token: '', tokenExp: 0, sesi: '', sesiExp: 0, bukaPO: '', awal: null };
   const memo = {};
   const $ = id => document.getElementById(id);
 
@@ -126,6 +126,7 @@ window.App = (function () {
   function keluar(tampilkanLogin) {
     sessionStorage.removeItem('snd_token');
     state.token = ''; state.tokenExp = 0; state.email = '';
+    hapusSesi();
     Object.keys(memo).forEach(k => delete memo[k]);
     try { Object.keys(localStorage).filter(k => k.startsWith('snd_c_')).forEach(k => localStorage.removeItem(k)); } catch (e) {} // hapus cache offline milik akun ini
     try { google.accounts.id.disableAutoSelect(); } catch (e) {}
@@ -144,10 +145,14 @@ window.App = (function () {
   // ---------- panggilan server ----------
   /** api('getDataApp', ...args) -> POST text/plain ke Apps Script (tanpa preflight CORS). */
   async function api(aksi, ...args) {
-    const token = await pastikanToken();
+    // sesi SND Apps (7 hari) kalau ada, kalau tidak ID token Google
+    return panggil(sesiValid() ? { sesi: state.sesi } : { token: await pastikanToken() }, aksi, args);
+  }
+
+  async function panggil(kredensial, aksi, args) {
     let teks;
     try {
-      const res = await fetch(CFG.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ token, aksi, args }), redirect: 'follow' });
+      const res = await fetch(CFG.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ ...kredensial, aksi, args }), redirect: 'follow' });
       teks = await res.text();
     } catch (e) {
       const err = new Error('Tidak ada koneksi ke server.');
@@ -157,10 +162,34 @@ window.App = (function () {
     let j;
     try { j = JSON.parse(teks); } catch (e) { throw new Error('Jawaban server tidak dikenal (cek URL API).'); }
     if (j.error) {
-      if (j.kode === 401) { keluar(true); }
+      if (j.kode === 401) { hapusSesi(); keluar(true); }
       throw new Error(j.error);
     }
     return j.data;
+  }
+
+  // ---------- sesi SND Apps (localStorage, dipakai bersama Chrome & APK) ----------
+  const SESI_KEY = 'snd_sesi';
+  const sesiValid = () => !!state.sesi && Date.now() < state.sesiExp - 60_000;
+  function hapusSesi() { state.sesi = ''; state.sesiExp = 0; try { localStorage.removeItem(SESI_KEY); } catch (e) {} }
+
+  /** Pakai sesi tersimpan (mis. login dilakukan di Chrome, lalu APK dibuka). */
+  function muatSesi() {
+    try {
+      const j = JSON.parse(localStorage.getItem(SESI_KEY) || 'null');
+      if (!j || !j.sesi || !j.email || Date.now() >= j.exp - 60_000) { localStorage.removeItem(SESI_KEY); return false; }
+      state.sesi = j.sesi; state.sesiExp = j.exp; state.email = j.email; state.nama = j.nama || '';
+      return true;
+    } catch (e) { return false; }
+  }
+
+  /** Setelah login Google berhasil: minta server menerbitkan sesi 7 hari, simpan di perangkat. */
+  function buatSesiBaru() {
+    if (sesiValid() || !tokenValid()) return;
+    panggil({ token: state.token }, 'buatSesi', []).then(s => {
+      state.sesi = s.sesi; state.sesiExp = s.exp;
+      try { localStorage.setItem(SESI_KEY, JSON.stringify({ sesi: s.sesi, exp: s.exp, email: s.email, nama: s.nama })); } catch (e) {}
+    }).catch(() => { /* sesi opsional: kalau gagal, tetap jalan dengan token Google */ });
   }
 
   // ---------- cache offline (localStorage, per akun) ----------
@@ -312,6 +341,7 @@ window.App = (function () {
     const awal = location.hash.slice(1);
     buka(halaman.some(h => h.id === awal) ? awal : (halaman[0] && halaman[0].id));
     api('getKonteks').then(k => { state.konteks = k; }).catch(() => {});
+    buatSesiBaru();
     window.dispatchEvent(new Event('snd:masuk'));
   }
 
@@ -335,7 +365,7 @@ window.App = (function () {
     }
     const alt = $('btnMasukAlt');
     if (alt) alt.addEventListener('click', masukRedirect);
-    if (terimaRedirect() || muatTokenTersimpan()) setelahMasuk(); else tampilLogin('');
+    if (terimaRedirect() || muatSesi() || muatTokenTersimpan()) setelahMasuk(); else tampilLogin('');
   }
 
   return { daftar, halaman: () => halaman, buka, mulai, api, ambil, isi, toast, sheet, keluar, esc, angka, rp, tanggal, hariAntara, ikon, state, $ };

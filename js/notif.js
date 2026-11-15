@@ -136,5 +136,5 @@
   document.getElementById('btnNotif').addEventListener('click', buka);
   window.addEventListener('snd:masuk', () => muat(false));
   window.addEventListener('snd:data', e => { if (e.detail && e.detail.aksi === 'getDataApp') perbarui(e.detail.data); });
-  setInterval(() => { if (App.state.token) muat(true); }, 10 * 60 * 1000);
+  setInterval(() => { if (App.state.email) muat(true); }, 10 * 60 * 1000);
 })();
