@@ -1,6 +1,7 @@
 /**
- * Halaman: Monitoring MRP.
+ * Halaman: Monitoring MRP PO.
  * Semua PO dari sheet Incoming 6 cabang (open + selesai), status terima, umur PO, ETA/catatan, dan status PO di Servia.
+ * Filter tersimpan di URL (#monitoring?k=telat&c=JOGLO) supaya bisa dibagikan dan bertahan saat refresh.
  */
 (function () {
   const { api, toast, sheet, esc, angka, tanggal, ikon, $ } = App;
@@ -8,6 +9,8 @@
   let dimuat = false;
   const F = { mode: 'open', cabang: '', q: '', urut: 'umur', kpi: '' };
   let ui = null; // { setSub, setAksi }
+
+  const simpanFilter = () => App.simpanQuery({ m: F.mode !== 'open' ? F.mode : '', c: F.cabang, q: F.q, u: F.urut !== 'umur' ? F.urut : '', k: F.kpi });
 
   // ---------- turunan per PO ----------
   const nol = r => !r.selesai && r.recv === 0;
@@ -24,55 +27,61 @@
     return { kelas: 'abu', teks: 'Servia: ' + s.toLowerCase() };
   };
 
-  // ---------- render kerangka halaman ----------
+  // ---------- kerangka halaman ----------
   function render(el, u) {
     ui = u;
-    u.setAksi(`<button type="button" class="tombol-ikon" id="btnEkspor" title="Ekspor ke Excel">${ikon.unduh}</button>
-      <button type="button" class="tombol-ikon" id="btnSync" title="Sync dari sheet MRP">${ikon.sync}</button>
-      <button type="button" class="tombol oranye hanya-desktop" id="btnSyncTeks">${ikon.sync}<span>Sync sekarang</span></button>`);
+    u.setAksi(`<button type="button" class="tombol-ikon" id="btnEkspor" title="Ekspor ke Excel" aria-label="Ekspor ke Excel">${ikon.unduh}</button>
+      <button type="button" class="tombol-ikon" id="btnSync" title="Sinkron dari sheet MRP" aria-label="Sinkron dari sheet MRP">${ikon.sync}</button>`);
     el.innerHTML = `
-      <section class="bagian kpi" id="kpi">${Array.from({ length: 6 }, () => '<div class="ubin"><div class="skeleton" style="width:70%"></div><div class="skeleton" style="height:28px;margin-top:8px;width:40%"></div></div>').join('')}</section>
-      <section class="bagian kartu" id="panelFilter">
+      <section class="bagian kpi" id="kpi" aria-label="Ringkasan PO">${Array.from({ length: 6 }, () => '<div class="ubin"><div class="skeleton" style="width:70%"></div><div class="skeleton" style="height:26px;margin-top:8px;width:40%"></div></div>').join('')}</section>
+      <section class="bagian" id="panelFilter" aria-label="Filter">
         <div class="toolbar">
-          <div class="segmen" id="segMode">
-            <button type="button" data-mode="open" class="aktif">Open</button>
+          <div class="segmen" id="segMode" role="group" aria-label="Status PO">
+            <button type="button" data-mode="open">Open</button>
             <button type="button" data-mode="selesai">Selesai</button>
             <button type="button" data-mode="semua">Semua</button>
           </div>
-          <div class="input-cari">${ikon.cari}<input class="input" id="cari" placeholder="Cari No PO / kode part / nama part" autocomplete="off"></div>
-          <select class="input" id="urut">
+          <div class="input-cari">${ikon.cari}<input class="input" id="cari" name="cari" type="search" placeholder="Cari No PO, kode part, atau nama part…" aria-label="Cari PO" autocomplete="off" spellcheck="false"></div>
+          <select class="input" id="urut" name="urut" aria-label="Urutkan daftar">
             <option value="umur">Urut: paling lama</option>
             <option value="baru">Urut: PO terbaru</option>
             <option value="cabang">Urut: cabang</option>
             <option value="sisa">Urut: sisa qty terbanyak</option>
           </select>
         </div>
-        <div class="chips" id="chipsCabang" style="margin-top:10px"></div>
+        <div class="chips" id="chipsCabang" role="group" aria-label="Cabang" style="margin-top:10px"></div>
       </section>
       <div class="dua-kolom bagian">
-        <section>
-          <div class="teks-kecil" id="ringkasDaftar" style="margin:2px 0 8px"></div>
-          <div class="daftar" id="daftar">${Array.from({ length: 4 }, () => '<div class="po"><div class="skeleton" style="width:55%"></div><div class="skeleton" style="width:35%;margin-top:8px"></div><div class="skeleton" style="height:8px;margin-top:14px"></div></div>').join('')}</div>
+        <section aria-label="Daftar PO">
+          <div class="teks-kecil" id="ringkasDaftar" aria-live="polite" style="margin:0 2px 8px"></div>
+          <div class="daftar" id="daftar">${Array.from({ length: 4 }, () => '<div class="po"><div class="skeleton" style="width:55%"></div><div class="skeleton" style="width:35%;margin-top:8px"></div></div>').join('')}</div>
         </section>
-        <aside>
-          <div class="kartu"><div class="kartu-judul"><h2>PO Open per Cabang</h2><small>${ikon.grafik}</small></div><div id="grafikCabang"></div>
-            <div class="legenda"><span><i style="background:var(--merah)"></i>Belum ada progres</span><span><i style="background:var(--kuning)"></i>Partial</span></div></div>
-          <div class="kartu"><div class="kartu-judul"><h2>Umur PO Open</h2></div><div id="grafikAging"></div></div>
+        <aside aria-label="Grafik">
+          <div class="kartu"><div class="kartu-judul"><h2>PO open per cabang</h2></div><div id="grafikCabang"></div>
+            <div class="legenda"><span><i class="seri-crit"></i>Belum ada progres</span><span><i class="seri-warn"></i>Sebagian</span></div></div>
+          <div class="kartu"><div class="kartu-judul"><h2>Umur PO open</h2></div><div id="grafikAging"></div></div>
         </aside>
       </div>`;
 
     $('btnEkspor').addEventListener('click', ekspor);
     $('btnSync').addEventListener('click', sync);
-    $('btnSyncTeks').addEventListener('click', sync);
-    $('segMode').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; F.mode = b.dataset.mode; F.kpi = ''; gambarSemua(); });
-    $('cari').addEventListener('input', e => { F.q = e.target.value.trim().toUpperCase(); gambarDaftar(); });
-    $('urut').addEventListener('change', e => { F.urut = e.target.value; gambarDaftar(); });
-    $('chipsCabang').addEventListener('click', e => { const c = e.target.closest('.chip'); if (!c) return; F.cabang = c.dataset.cabang; gambarSemua(); });
-    $('kpi').addEventListener('click', e => { const u = e.target.closest('.ubin'); if (!u || !u.dataset.kpi) return; F.kpi = F.kpi === u.dataset.kpi ? '' : u.dataset.kpi; if (F.kpi && F.mode === 'selesai') F.mode = 'open'; gambarSemua(); });
-    $('daftar').addEventListener('click', e => { const k = e.target.closest('.po'); if (k) bukaDetail(k.dataset.key); });
+    $('segMode').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; F.mode = b.dataset.mode; F.kpi = ''; simpanFilter(); gambarSemua(); });
+    $('cari').addEventListener('input', e => { F.q = e.target.value.trim().toUpperCase(); simpanFilter(); gambarDaftar(); });
+    $('urut').addEventListener('change', e => { F.urut = e.target.value; simpanFilter(); gambarDaftar(); });
+    $('chipsCabang').addEventListener('click', e => { const c = e.target.closest('.chip'); if (!c) return; F.cabang = c.dataset.cabang; simpanFilter(); gambarSemua(); });
+    $('kpi').addEventListener('click', e => { const u = e.target.closest('.ubin'); if (!u || !u.dataset.kpi) return; F.kpi = F.kpi === u.dataset.kpi ? '' : u.dataset.kpi; if (F.kpi && F.mode === 'selesai') F.mode = 'open'; simpanFilter(); gambarSemua(); });
+    $('daftar').addEventListener('click', e => { const k = e.target.closest('.po'); if (k && k.dataset.key) bukaDetail(k.dataset.key); });
 
-    const awal = App.state.awal; // filter dari kartu ringkasan di Beranda
-    if (awal && awal.halaman === 'monitoring') { F.kpi = awal.kpi || ''; F.mode = 'open'; F.cabang = ''; App.state.awal = null; }
+    // filter awal: dari tautan (URL) atau dari ringkasan di Beranda
+    Object.assign(F, { mode: 'open', cabang: '', q: '', urut: 'umur', kpi: '' });
+    const q = App.state.query;
+    if (q && [...q.keys()].length) {
+      F.mode = q.get('m') || 'open'; F.cabang = q.get('c') || ''; F.q = (q.get('q') || '').toUpperCase(); F.urut = q.get('u') || 'umur'; F.kpi = q.get('k') || '';
+    }
+    const awal = App.state.awal;
+    if (awal && awal.halaman === 'monitoring') { F.kpi = awal.kpi || ''; F.mode = 'open'; F.cabang = ''; App.state.awal = null; simpanFilter(); }
+    $('cari').value = F.q;
+    $('urut').value = F.urut;
     if (dimuat) terima(DATA); else muat();
   }
 
@@ -83,17 +92,18 @@
   function sync() {
     setSibuk(true);
     toast('Membaca sheet Incoming semua cabang…');
-    api('syncDariApp').then(d => { App.isi('getDataApp', d); terima(d); toast('Sync selesai.'); }).catch(gagal);
+    api('syncDariApp').then(d => { App.isi('getDataApp', d); terima(d); toast('Sinkron selesai.'); }).catch(gagal);
   }
 
   function setSibuk(sibuk) {
-    ['btnSync', 'btnSyncTeks'].forEach(id => { const b = $(id); if (b) b.disabled = sibuk; });
+    const b = $('btnSync');
+    if (b) b.disabled = sibuk;
   }
 
   function gagal(e) {
     setSibuk(false);
     toast(e && e.message ? e.message : 'Terjadi kesalahan.', true);
-    if (!dimuat && App.state.aktif === 'monitoring') $('daftar').innerHTML = `<div class="kosong">${ikon.kosong}<div>${esc(e && e.message || 'Gagal memuat data')}</div><button type="button" class="tombol halus" style="margin-top:12px" onclick="App.buka('monitoring')">Coba lagi</button></div>`;
+    if (!dimuat && App.state.aktif === 'monitoring') $('daftar').innerHTML = `<div class="kosong">${ikon.kosong}<div>${esc(e && e.message || 'Data PO belum bisa dimuat.')}</div><button type="button" class="tombol halus" id="coba">Coba lagi</button></div>`, $('coba').addEventListener('click', muat);
   }
 
   function terima(d) {
@@ -101,7 +111,7 @@
     setSibuk(false);
     if (App.state.aktif !== 'monitoring') return; // pengguna sudah pindah halaman
     const open = d.rows.filter(r => !r.selesai).length;
-    if (ui) ui.setSub(`${d.update || 'Belum sync'} · ${open} PO open · ${d.rows.length - open} selesai${d.offlineSejak ? ' · OFFLINE' : ''}`);
+    if (ui) ui.setSub(`${d.update || 'Belum sinkron'} · ${open} PO open · ${d.rows.length - open} selesai${d.offlineSejak ? ' · offline' : ''}`);
     gambarSemua();
     if (App.state.bukaPO) { const k = App.state.bukaPO; App.state.bukaPO = ''; bukaDetail(k); } // dibuka dari notifikasi
   }
@@ -116,33 +126,31 @@
 
   // ---------- bagian-bagian ----------
   function gambarSegmen() {
-    document.querySelectorAll('#segMode button').forEach(b => b.classList.toggle('aktif', b.dataset.mode === F.mode));
+    document.querySelectorAll('#segMode button').forEach(b => { const on = b.dataset.mode === F.mode; b.classList.toggle('aktif', on); b.setAttribute('aria-pressed', on); });
   }
 
-  function dasar() {
-    return DATA.rows.filter(r => !F.cabang || r.cabang === F.cabang);
-  }
+  const dasar = () => DATA.rows.filter(r => !F.cabang || r.cabang === F.cabang);
 
   function gambarKpi() {
     const r = dasar().filter(x => !x.selesai);
-    const ubin = [
-      ['open', 'PO Open', r.length, ''],
-      ['nol', 'Belum Ada Progres', r.filter(nol).length, 'merah'],
-      ['partial', 'Partial', r.filter(x => !nol(x)).length, 'oranye'],
-      ['telat', `> ${DATA.batas} Hari Tanpa Progres`, r.filter(telat).length, 'merah'],
-      ['noeta', 'Belum Ada ETA', r.filter(x => !adaEta(x)).length, ''],
-      ['lewat', 'ETA Lewat', r.filter(etaLewat).length, 'merah'],
+    const sel = [
+      ['open', 'PO open', r.length, ''],
+      ['nol', 'Belum ada progres', r.filter(nol).length, 'merah'],
+      ['partial', 'Sebagian', r.filter(x => !nol(x)).length, ''],
+      ['telat', `> ${DATA.batas} hari tanpa progres`, r.filter(telat).length, 'merah'],
+      ['noeta', 'Belum ada ETA', r.filter(x => !adaEta(x)).length, 'oranye'],
+      ['lewat', 'ETA lewat', r.filter(etaLewat).length, 'merah'],
     ];
-    $('kpi').innerHTML = ubin.map(([id, label, nilai, warna]) =>
-      `<div class="ubin ${F.kpi === id ? 'aktif' : ''}" data-kpi="${id}"><div class="label">${esc(label)}</div><div class="nilai ${nilai && warna ? warna : ''}">${angka(nilai)}</div></div>`).join('');
+    $('kpi').innerHTML = sel.map(([id, label, nilai, warna]) =>
+      `<button type="button" class="ubin ${F.kpi === id ? 'aktif' : ''}" data-kpi="${id}" aria-pressed="${F.kpi === id}"><span class="label">${esc(label)}</span><span class="nilai">${angka(nilai)}</span>${nilai && warna ? `<span class="penanda ${warna}"><span class="sr">, perlu perhatian</span></span>` : ''}</button>`).join('');
   }
 
   function gambarChips() {
     const hitung = {};
     DATA.rows.filter(r => !r.selesai).forEach(r => { hitung[r.cabang] = (hitung[r.cabang] || 0) + 1; });
     const nama = [...new Set(DATA.rows.map(r => r.cabang))].sort();
-    $('chipsCabang').innerHTML = [`<button type="button" class="chip ${F.cabang ? '' : 'aktif'}" data-cabang="">Semua cabang</button>`]
-      .concat(nama.map(c => `<button type="button" class="chip ${F.cabang === c ? 'aktif' : ''}" data-cabang="${esc(c)}">${esc(c)}<b>${hitung[c] || 0}</b></button>`)).join('');
+    $('chipsCabang').innerHTML = [`<button type="button" class="chip ${F.cabang ? '' : 'aktif'}" data-cabang="" aria-pressed="${!F.cabang}">Semua cabang</button>`]
+      .concat(nama.map(c => `<button type="button" class="chip ${F.cabang === c ? 'aktif' : ''}" data-cabang="${esc(c)}" aria-pressed="${F.cabang === c}">${esc(c)}<b>${hitung[c] || 0}</b></button>`)).join('');
   }
 
   function gambarGrafik() {
@@ -153,18 +161,18 @@
     const maks = Math.max(1, ...nama.map(c => grup[c].nol + grup[c].partial));
     $('grafikCabang').innerHTML = nama.length ? nama.map(c => {
       const g = grup[c];
-      return `<div class="bar"><div class="nama" title="${esc(c)}">${esc(c)}</div><div class="jalur"><span style="width:${g.nol / maks * 100}%;background:var(--merah)"></span><span style="width:${g.partial / maks * 100}%;background:var(--kuning)"></span></div><div class="angka">${g.nol + g.partial}</div></div>`;
+      return `<div class="bar" title="${esc(c)}: ${g.nol} belum ada progres, ${g.partial} sebagian"><div class="nama">${esc(c)}</div><div class="jalur"><span class="seri-crit" style="width:${g.nol / maks * 100}%"></span><span class="seri-warn" style="width:${g.partial / maks * 100}%"></span></div><div class="angka">${g.nol + g.partial}</div></div>`;
     }).join('') : '<div class="teks-kecil">Tidak ada PO open.</div>';
 
     const umur = open.map(r => r.aging).filter(a => a !== null);
     const kelompok = [
-      ['0 - 3 hari', umur.filter(a => a <= 3).length, 'var(--hijau)'],
-      ['4 - 7 hari', umur.filter(a => a >= 4 && a <= 7).length, 'var(--kuning)'],
-      ['8 - 14 hari', umur.filter(a => a >= 8 && a <= 14).length, '#EF6C00'],
-      ['> 14 hari', umur.filter(a => a > 14).length, 'var(--merah)'],
+      ['0–3 hari', umur.filter(a => a <= 3).length, 'skala-1'],
+      ['4–7 hari', umur.filter(a => a >= 4 && a <= 7).length, 'skala-2'],
+      ['8–14 hari', umur.filter(a => a >= 8 && a <= 14).length, 'skala-3'],
+      ['> 14 hari', umur.filter(a => a > 14).length, 'skala-4'],
     ];
     const maksU = Math.max(1, ...kelompok.map(k => k[1]));
-    $('grafikAging').innerHTML = kelompok.map(k => `<div class="bar"><div class="nama">${k[0]}</div><div class="jalur"><span style="width:${k[1] / maksU * 100}%;background:${k[2]}"></span></div><div class="angka">${k[1]}</div></div>`).join('');
+    $('grafikAging').innerHTML = kelompok.map(k => `<div class="bar" title="${k[0]}: ${k[1]} PO"><div class="nama">${k[0]}</div><div class="jalur"><span class="${k[2]}" style="width:${k[1] / maksU * 100}%"></span></div><div class="angka">${k[1]}</div></div>`).join('');
   }
 
   function lolos(r) {
@@ -198,64 +206,64 @@
   function gambarDaftar() {
     const baris = dasar().filter(lolos).sort(urutkan);
     const label = { open: 'PO open', selesai: 'PO selesai', semua: 'PO' }[F.mode];
-    $('ringkasDaftar').textContent = `${angka(baris.length)} ${label}${F.cabang ? ' · ' + F.cabang : ''}${F.kpi ? ' · filter aktif' : ''}${F.q ? ' · "' + F.q + '"' : ''}`;
+    $('ringkasDaftar').textContent = `${angka(baris.length)} ${label}${F.cabang ? ' · ' + F.cabang : ''}${F.kpi ? ' · filter aktif' : ''}${F.q ? ' · “' + F.q + '”' : ''}`;
     if (!baris.length) {
-      $('daftar').innerHTML = `<div class="kosong" style="grid-column:1/-1">${ikon.kosong}<div>Tidak ada PO yang cocok.</div></div>`;
+      $('daftar').innerHTML = `<div class="kosong">${ikon.kosong}<div>Tidak ada PO yang cocok dengan filter ini.</div></div>`;
       return;
     }
-    $('daftar').innerHTML = baris.slice(0, 300).map(kartuPO).join('') +
-      (baris.length > 300 ? `<div class="teks-kecil" style="grid-column:1/-1;text-align:center;padding:8px">Menampilkan 300 dari ${angka(baris.length)} — persempit dengan filter/pencarian.</div>` : '');
+    $('daftar').innerHTML = '<div class="daftar-kepala"><span>PO</span><span>Umur</span><span>Terima</span><span>Status</span><span>ETA</span><span>Servia</span></div>' +
+      baris.slice(0, 300).map(kartuPO).join('') +
+      (baris.length > 300 ? `<div class="teks-kecil" style="padding:12px 14px">Menampilkan 300 dari ${angka(baris.length)} PO. Persempit dengan filter atau pencarian.</div>` : '');
   }
 
   function kartuPO(r) {
     const p = persen(r);
-    const kelasProgres = r.selesai ? '' : r.recv === 0 ? 'kosong' : 'sebagian';
+    const kelasProgres = r.selesai ? 'penuh' : r.recv === 0 ? 'kosong' : '';
     const status = r.selesai ? '<span class="badge hijau titik">Selesai</span>'
-      : nol(r) ? '<span class="badge merah titik">Belum ada progres</span>' : '<span class="badge kuning titik">Partial</span>';
+      : nol(r) ? '<span class="badge merah titik">Belum ada progres</span>' : '<span class="badge kuning titik">Sebagian</span>';
     const sv = serviaInfo(r);
-    const umur = r.selesai ? '' : r.aging === null ? '' : `<span class="badge ${telat(r) ? 'merah' : r.aging > DATA.batas ? 'oranye' : 'abu'}">${r.aging} hari</span>`;
-    const eta = r.selesai ? '' : r.etaInput ? `<span class="badge ${etaLewat(r) ? 'merah' : ''}">ETA ${tanggal(r.etaInput)}${etaLewat(r) ? ' · lewat' : ''}</span>`
-      : r.etaText ? `<span class="badge">ETA ${esc(r.etaText)}</span>` : '<span class="badge abu">Belum ada ETA</span>';
-    return `<article class="po ${telat(r) ? 'telat' : ''} ${r.selesai ? 'selesai' : ''}" data-key="${esc(r.key)}">
-      <div class="po-atas">
-        <div><div class="po-no">${esc(r.po)}</div><div class="po-meta">${esc(r.cabang)} · PO ${esc(r.tglPO || '-')} · ${r.items.length} item</div></div>
-        ${umur}
-      </div>
-      <div class="po-tengah"><div class="progres ${kelasProgres}"><span style="width:${p}%"></span></div><div class="po-qty">${angka(r.recv)}/${angka(r.order)} <span class="teks-kecil">(${p}%)</span></div></div>
-      <div class="po-bawah">${status}${eta}<span class="badge ${sv.kelas}">${esc(sv.teks)}</span>${r.catatan ? `<span class="kanan" title="${esc(r.catatan)}">📝 ${esc(r.catatan.slice(0, 28))}${r.catatan.length > 28 ? '…' : ''}</span>` : ''}</div>
-    </article>`;
+    const umur = r.selesai || r.aging === null ? '<span class="po-umur"></span>'
+      : `<span class="po-umur ${telat(r) ? 'telat' : r.aging > DATA.batas ? 'lama' : ''}">${r.aging} hari</span>`;
+    const eta = r.selesai ? '<span class="po-eta"></span>'
+      : r.etaInput ? `<span class="po-eta ${etaLewat(r) ? 'lewat' : ''}">${etaLewat(r) ? 'Lewat ' : 'ETA '}${tanggal(r.etaInput)}</span>`
+      : r.etaText ? `<span class="po-eta">ETA ${esc(r.etaText)}</span>` : '<span class="po-eta kosong">Belum ada ETA</span>';
+    return `<button type="button" class="po ${telat(r) ? 'telat' : ''} ${r.selesai ? 'selesai' : ''}" data-key="${esc(r.key)}">
+      <span class="po-info"><span class="po-no">${esc(r.po)}</span><span class="po-meta">${esc(r.cabang)} · ${esc(r.tglPO || '-')} · ${r.items.length} item</span>${r.catatan ? `<span class="po-cat">Catatan: ${esc(r.catatan)}</span>` : ''}</span>
+      ${umur}
+      <span class="po-prog"><span class="progres ${kelasProgres}"><span style="width:${p}%"></span></span><span class="po-qty">${angka(r.recv)}/${angka(r.order)}</span></span>
+      <span class="po-tanda">${status}${eta}<span class="badge ${sv.kelas}">${esc(sv.teks)}</span></span>
+    </button>`;
   }
 
-  // ---------- detail PO (bottom sheet) ----------
+  // ---------- detail PO (dialog) ----------
   function bukaDetail(key) {
     const r = DATA.rows.find(x => x.key === key);
     if (!r) return;
     const sv = serviaInfo(r);
-    const baris = r.items.map(it => `<tr class="${it.recv >= it.order ? 'penuh' : it.recv === 0 ? 'kurang' : ''}"><td><div class="kode">${esc(it.kode)}</div>${it.desc ? `<div class="desc">${esc(it.desc)}</div>` : ''}</td><td class="angka">${angka(it.recv)} / ${angka(it.order)}</td><td class="angka">${angka(Math.max(0, it.order - it.recv))}</td></tr>`).join('');
+    const baris = r.items.map(it => `<div class="item-baris ${it.recv >= it.order ? 'penuh' : it.recv === 0 ? 'kurang' : ''}"><span class="item-info"><span class="kode">${esc(it.kode)}</span>${it.desc ? `<span class="desc">${esc(it.desc)}</span>` : ''}</span><span>${angka(it.recv)} / ${angka(it.order)}</span><span>${angka(Math.max(0, it.order - it.recv))}</span></div>`).join('');
     const form = r.selesai ? '' : `
       <div class="pemisah"></div>
-      <div class="form-baris"><label class="label" for="fEta">ETA dari VinFast</label><input class="input" type="date" id="fEta" value="${esc(r.etaInput)}">${r.etaText ? `<div class="teks-kecil" style="margin-top:4px">Teks lama: ${esc(r.etaText)}</div>` : ''}</div>
-      <div class="form-baris"><label class="label" for="fCatatan">Catatan follow-up</label><input class="input" type="text" id="fCatatan" maxlength="500" placeholder="mis. sudah dikonfirmasi VinFast, kirim bertahap" value="${esc(r.catatan)}"></div>
-      <div class="form-baris" style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="tombol penuh" id="btnSimpan">Simpan ETA & catatan</button></div>`;
+      <div class="form-baris"><label class="label" for="fEta">ETA dari VinFast</label><input class="input" type="date" id="fEta" name="eta" autocomplete="off" value="${esc(r.etaInput)}">${r.etaText ? `<div class="teks-kecil" style="margin-top:4px">Teks lama: ${esc(r.etaText)}</div>` : ''}</div>
+      <div class="form-baris"><label class="label" for="fCatatan">Catatan follow-up</label><input class="input" type="text" id="fCatatan" name="catatan" maxlength="500" autocomplete="off" placeholder="mis. VinFast konfirmasi kirim bertahap…" value="${esc(r.catatan)}"></div>
+      <div class="form-baris"><button type="button" class="tombol penuh" id="btnSimpan">Simpan ETA & catatan</button></div>`;
     sheet.buka(esc(r.po), `
-      <div class="detail-kepala">
-        <div class="po-bawah">${r.selesai ? '<span class="badge hijau titik">Selesai</span>' : nol(r) ? '<span class="badge merah titik">Belum ada progres</span>' : '<span class="badge kuning titik">Partial</span>'}<span class="badge ${sv.kelas}">${esc(sv.teks)}</span>${telat(r) ? `<span class="badge merah">> ${DATA.batas} hari tanpa progres</span>` : ''}</div>
-      </div>
+      <div class="detail-kepala">${r.selesai ? '<span class="badge hijau titik">Selesai</span>' : nol(r) ? '<span class="badge merah titik">Belum ada progres</span>' : '<span class="badge kuning titik">Sebagian</span>'}<span class="badge ${sv.kelas}">${esc(sv.teks)}</span>${telat(r) ? `<span class="badge merah titik">Lebih dari ${DATA.batas} hari tanpa progres</span>` : ''}</div>
       <div class="detail-baris"><span>Cabang</span><span>${esc(r.cabang)}</span></div>
       <div class="detail-baris"><span>Tanggal PO</span><span>${esc(r.tglPO || '-')}${r.aging !== null && !r.selesai ? ` · ${r.aging} hari` : ''}</span></div>
       <div class="detail-baris"><span>Diterima</span><span>${angka(r.recv)} / ${angka(r.order)} pcs (${persen(r)}%)</span></div>
       ${r.servia && r.servia.waktu ? `<div class="detail-baris"><span>Dicatat Stock Bot</span><span>${esc(r.servia.waktu)}</span></div>` : ''}
-      ${r.url ? `<div class="detail-baris"><span>Sumber</span><span><a href="${esc(r.url)}" target="_blank" rel="noopener">Buka sheet MRP ${ikon.luar.replace('viewBox', 'style="width:14px;height:14px;vertical-align:-2px" viewBox')}</a></span></div>` : ''}
+      ${r.url ? `<div class="detail-baris"><span>Sumber</span><span><a href="${esc(r.url)}" target="_blank" rel="noopener">Buka sheet MRP</a></span></div>` : ''}
       <div class="pemisah"></div>
-      <h3 style="font-size:13px;margin-bottom:8px">Item (${r.items.length})</h3>
-      <table class="tabel-item"><thead><tr><th>Part</th><th class="angka">Terima / Order</th><th class="angka">Sisa</th></tr></thead><tbody>${baris || '<tr><td colspan="3" class="teks-kecil">Detail item belum tersedia, klik Sync.</td></tr>'}</tbody></table>
+      <h3 class="judul-kecil">Item (${r.items.length})</h3>
+      <div class="item-kepala"><span>Part</span><span>Terima / Order</span><span>Sisa</span></div>
+      ${baris || '<div class="teks-kecil" style="padding:10px 0">Detail item belum tersedia. Jalankan sinkron.</div>'}
       ${form}
       <div class="pemisah"></div>
-      <h3 style="font-size:13px;margin-bottom:8px">Riwayat ETA & catatan</h3>
+      <h3 class="judul-kecil">Riwayat ETA & catatan</h3>
       <div id="riwayat" class="teks-kecil">Memuat…</div>`);
     const btn = $('btnSimpan');
     if (btn) btn.addEventListener('click', () => simpan(r.key));
-    api('getRiwayat', r.key).then(gambarRiwayat).catch(() => { const el = $('riwayat'); if (el) el.textContent = 'Riwayat tidak bisa dimuat (offline?).'; });
+    api('getRiwayat', r.key).then(gambarRiwayat).catch(() => { const el = $('riwayat'); if (el) el.textContent = 'Riwayat belum bisa dimuat. Periksa koneksi.'; });
   }
 
   function gambarRiwayat(list) {
@@ -292,5 +300,5 @@
       .catch(e => { btn.disabled = false; toast(e.message || 'Gagal menyimpan.', true); });
   }
 
-  App.daftar({ id: 'monitoring', label: 'Monitoring MRP PO', pendek: 'PO', ikon: 'monitor', desk: 'PO VinFast dari sheet Incoming 6 cabang: progres terima, umur PO, ETA, dan status PO di Servia.', tanda: 'Buka monitoring PO', render });
+  App.daftar({ id: 'monitoring', label: 'Monitoring MRP PO', pendek: 'PO', ikon: 'monitor', desk: 'PO VinFast dari 6 cabang: progres terima, umur PO, ETA, dan status di Servia.', render });
 })();

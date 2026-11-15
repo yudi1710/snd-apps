@@ -7,7 +7,7 @@
 window.App = (function () {
   const CFG = window.SND_CONFIG || {};
   const halaman = [];
-  const state = { aktif: null, email: '', konteks: null, token: '', tokenExp: 0, sesi: '', sesiExp: 0, bukaPO: '', awal: null };
+  const state = { aktif: null, email: '', konteks: null, token: '', tokenExp: 0, sesi: '', sesiExp: 0, bukaPO: '', awal: null, query: new URLSearchParams() };
   const memo = {};
   const $ = id => document.getElementById(id);
 
@@ -31,6 +31,12 @@ window.App = (function () {
     beranda: '<svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/></svg>',
     kartu: '<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
     lonceng: '<svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 21h4"/></svg>',
+    kotak: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8"/></svg>',
+    jam: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+    centang: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l4.5 4.5L19 7"/></svg>',
+    panah: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
+    pin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+    loncengMati: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 9.3-5M18 8c0 4 1 6 2 7H8M10 21h4M3 3l18 18"/></svg>',
     unduh: '<svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg>',
     keluar: '<svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3M13 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg>',
   };
@@ -206,71 +212,77 @@ window.App = (function () {
     toastTimer = setTimeout(() => { el.className = 'toast'; }, gagal ? 6000 : 2600);
   }
 
-  // ---------- bottom sheet ----------
+  // ---------- lembar detail (dialog) ----------
+  let fokusSebelum = null;
   const sheet = {
     buka(judul, html) {
+      fokusSebelum = document.activeElement;
       $('sheetJudul').innerHTML = judul;
       $('sheetBadan').innerHTML = html;
       $('sheet').classList.add('terbuka');
       $('sheet').setAttribute('aria-hidden', 'false');
       document.body.style.overflow = 'hidden';
       $('sheetBadan').scrollTop = 0;
+      const tutup = $('sheet').querySelector('.sheet-kepala [data-tutup]');
+      if (tutup) tutup.focus({ preventScroll: true });
     },
     tutup() {
+      if (!$('sheet').classList.contains('terbuka')) return;
       $('sheet').classList.remove('terbuka');
       $('sheet').setAttribute('aria-hidden', 'true');
       document.body.style.overflow = '';
+      if (fokusSebelum && document.contains(fokusSebelum) && fokusSebelum.focus) fokusSebelum.focus({ preventScroll: true });
+      fokusSebelum = null;
     },
     badan: () => $('sheetBadan'),
   };
+  /** Tab berputar di dalam dialog yang terbuka. */
+  function jebakFokus(e) {
+    if (e.key !== 'Tab' || !$('sheet').classList.contains('terbuka')) return;
+    const f = [...$('sheet').querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter(el => !el.disabled && el.offsetParent !== null);
+    if (!f.length) return;
+    const awal = f[0], akhir = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === awal) { e.preventDefault(); akhir.focus(); }
+    else if (!e.shiftKey && document.activeElement === akhir) { e.preventDefault(); awal.focus(); }
+  }
 
   // ---------- navigasi ----------
   function daftar(h) { halaman.push(h); }
 
-  // Nav dibangun sekali; gelembung kaca (iOS) bergeser ke menu aktif dengan animasi pegas.
-  let navDibangun = false, navSudahTampil = false;
+  // Nav dibangun sekali; hanya penanda menu aktif yang berganti.
+  let navDibangun = false;
 
   function bangunNav() {
     const isi = (wadah, pendek) => {
-      wadah.innerHTML = '<span class="gelembung" aria-hidden="true"></span>' + halaman.map(h =>
+      wadah.innerHTML = halaman.map(h =>
         '<button type="button" data-hal="' + esc(h.id) + '" title="' + esc(h.label) + '">' + (ikon[h.ikon] || ikon.monitor) +
         '<span>' + esc(pendek ? (h.pendek || h.label) : h.label) + '</span></button>').join('');
     };
     isi($('navSamping'), false);
     isi($('bottomnav'), true);
     document.querySelectorAll('[data-hal]').forEach(b => b.addEventListener('click', () => { buka(b.dataset.hal); tutupLaci(); }));
-    if (window.ResizeObserver) {
-      const ro = new ResizeObserver(() => tandaiNav(false));
-      ro.observe($('navSamping')); ro.observe($('bottomnav'));
-    }
     navDibangun = true;
-  }
-
-  function posisiGelembung(wadah, tombol, animasi) {
-    const g = wadah.querySelector('.gelembung');
-    if (!g) return;
-    if (!tombol || !tombol.offsetWidth) { g.style.opacity = 0; return; }
-    if (!animasi) g.classList.add('langsung');
-    g.style.opacity = 1;
-    g.style.width = tombol.offsetWidth + 'px';
-    g.style.height = tombol.offsetHeight + 'px';
-    g.style.transform = 'translate(' + tombol.offsetLeft + 'px, ' + tombol.offsetTop + 'px)';
-    if (animasi) { g.classList.remove('lenting'); void g.offsetWidth; g.classList.add('lenting'); }
-    else requestAnimationFrame(() => g.classList.remove('langsung'));
-  }
-
-  function tandaiNav(animasi) {
-    [$('navSamping'), $('bottomnav')].forEach(wadah => {
-      let aktif = null;
-      wadah.querySelectorAll('button').forEach(b => { const on = b.dataset.hal === state.aktif; b.classList.toggle('aktif', on); if (on) aktif = b; });
-      posisiGelembung(wadah, aktif, animasi);
-    });
   }
 
   function gambarNav() {
     if (!navDibangun) bangunNav();
-    tandaiNav(navSudahTampil);
-    navSudahTampil = true;
+    [$('navSamping'), $('bottomnav')].forEach(wadah => wadah.querySelectorAll('button').forEach(b => {
+      const on = b.dataset.hal === state.aktif;
+      b.classList.toggle('aktif', on);
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    }));
+  }
+
+  // ---------- filter di URL: #halaman?k=v (bisa dibagikan, bertahan saat refresh) ----------
+  function infoHash() {
+    const h = location.hash.slice(1), i = h.indexOf('?');
+    return { id: i < 0 ? h : h.slice(0, i), q: new URLSearchParams(i < 0 ? '' : h.slice(i + 1)) };
+  }
+  function simpanQuery(obj) {
+    const p = new URLSearchParams();
+    Object.entries(obj).forEach(([k, v]) => { if (v) p.set(k, v); });
+    const s = p.toString();
+    try { history.replaceState(null, '', '#' + state.aktif + (s ? '?' + s : '')); } catch (e) {}
   }
 
   // ---------- sidebar ciut (desktop), pilihan diingat ----------
@@ -285,7 +297,8 @@ window.App = (function () {
     const h = halaman.find(x => x.id === id) || halaman[0];
     if (!h) return;
     state.aktif = h.id;
-    try { if (location.hash !== '#' + h.id) history.replaceState(null, '', '#' + h.id); } catch (e) {}
+    try { if (infoHash().id !== h.id) history.replaceState(null, '', '#' + h.id); } catch (e) {}
+    state.query = infoHash().q; // filter awal dari URL (dibaca halaman saat render)
     $('judulHal').textContent = h.label;
     $('subHal').textContent = '';
     $('aksiHal').innerHTML = '';
@@ -306,7 +319,7 @@ window.App = (function () {
 
   function setelahMasuk() {
     gambarPengguna();
-    const awal = location.hash.slice(1);
+    const awal = infoHash().id;
     buka(halaman.some(h => h.id === awal) ? awal : (halaman[0] && halaman[0].id));
     api('getKonteks').then(k => { state.konteks = k; }).catch(() => {});
     buatSesiBaru();
@@ -322,7 +335,8 @@ window.App = (function () {
     $('btnKeluar').addEventListener('click', () => keluar(true));
     document.querySelectorAll('[data-tutup]').forEach(el => el.addEventListener('click', sheet.tutup));
     document.addEventListener('keydown', e => { if (e.key === 'Escape') sheet.tutup(); });
-    window.addEventListener('hashchange', () => { const id = location.hash.slice(1); if (id && id !== state.aktif) buka(id); });
+    window.addEventListener('hashchange', () => { const id = infoHash().id; if (id && id !== state.aktif) buka(id); });
+    $('sheet').addEventListener('keydown', jebakFokus);
     $('versiApp').textContent = 'v' + (CFG.versi || '');
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
 
@@ -334,5 +348,5 @@ window.App = (function () {
     if (muatSesi() || muatTokenTersimpan()) setelahMasuk(); else tampilLogin('');
   }
 
-  return { daftar, halaman: () => halaman, buka, mulai, api, ambil, isi, toast, sheet, keluar, esc, angka, rp, tanggal, hariAntara, ikon, state, $ };
+  return { daftar, halaman: () => halaman, buka, mulai, simpanQuery, api, ambil, isi, toast, sheet, keluar, esc, angka, rp, tanggal, hariAntara, ikon, state, $ };
 })();

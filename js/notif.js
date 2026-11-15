@@ -7,7 +7,7 @@
  * Push: Stock Bot mengirim ke HP (reminder tiap pagi 09:00, PO baru yang perlu diproses); langganan didaftarkan lewat Apps Script.
  */
 (function () {
-  const { esc, angka, sheet, tanggal, toast } = App;
+  const { esc, angka, sheet, tanggal, toast, ikon } = App;
   const CFG = window.SND_CONFIG || {};
   const KUNCI = 'snd_notif_dibaca';
   let daftar = [];
@@ -47,15 +47,15 @@
     const pesan = n.jenis === 'eta'
       ? `ETA ${tanggal(r.etaInput)} sudah lewat, barang belum lengkap`
       : `${r.aging} hari sejak PO, belum full received`;
-    return `<div class="notif ${baru ? 'baru' : ''}" data-key="${esc(r.key)}">
-      <div class="notif-ikon ${n.jenis === 'eta' ? 'oranye' : 'merah'}">${n.jenis === 'eta' ? '⏰' : '📦'}</div>
-      <div class="notif-isi">
-        <div class="notif-judul">${esc(r.po)} <span class="teks-kecil">· ${esc(r.cabang)}</span></div>
-        <div class="notif-desk">${esc(pesan)}</div>
-        <div class="notif-meta">Diterima ${angka(r.recv)}/${angka(r.order)} pcs · PO ${esc(r.tglPO || '-')}</div>
-      </div>
-      ${baru ? '<span class="titik-baru" aria-label="baru"></span>' : ''}
-    </div>`;
+    return `<button type="button" class="notif ${baru ? 'baru' : ''}" data-key="${esc(r.key)}">
+      <span class="notif-ikon ${n.jenis === 'eta' ? 'oranye' : 'merah'}">${n.jenis === 'eta' ? ikon.jam : ikon.kotak}</span>
+      <span class="notif-isi">
+        <span class="notif-judul"><span class="kode-mono">${esc(r.po)}</span><span class="teks-kecil">${esc(r.cabang)}</span></span>
+        <span class="notif-desk" style="display:block">${esc(pesan)}</span>
+        <span class="notif-meta" style="display:block">Diterima ${angka(r.recv)}/${angka(r.order)} pcs · PO ${esc(r.tglPO || '-')}</span>
+      </span>
+      ${baru ? '<span class="titik-baru"><span class="sr">baru</span></span>' : ''}
+    </button>`;
   }
 
   // ---------- Web Push ----------
@@ -92,12 +92,12 @@
   async function gambarPush(wadah) {
     const s = await statusPush();
     const peta = {
-      'tidak-didukung': ['🔕', 'Notifikasi HP belum didukung di perangkat/browser ini.', ''],
-      ditolak: ['🔕', 'Notifikasi diblokir. Buka pengaturan aplikasi → Notifikasi → izinkan, lalu coba lagi.', ''],
-      mati: ['🔔', 'Dapatkan pengingat PO langsung di HP, walau app sedang tertutup.', '<button type="button" class="tombol penuh" id="btnPush">Aktifkan notifikasi di HP</button>'],
-      aktif: ['✅', 'Notifikasi HP aktif di perangkat ini.', '<button type="button" class="tombol garis penuh" id="btnPush">Matikan notifikasi di HP</button>'],
+      'tidak-didukung': [ikon.loncengMati, 'Notifikasi HP belum didukung di perangkat atau browser ini.', ''],
+      ditolak: [ikon.loncengMati, 'Notifikasi diblokir. Buka pengaturan aplikasi, pilih Notifikasi, izinkan, lalu coba lagi.', ''],
+      mati: [ikon.lonceng, 'Dapatkan pengingat PO langsung di HP, walau app sedang tertutup.', '<button type="button" class="tombol penuh" id="btnPush">Aktifkan notifikasi di HP</button>'],
+      aktif: [ikon.centang, 'Notifikasi HP aktif di perangkat ini.', '<button type="button" class="tombol garis penuh" id="btnPush">Matikan notifikasi di HP</button>'],
     }[s];
-    wadah.innerHTML = `<div class="push-kotak"><div class="push-judul"><span>${peta[0]}</span> Notifikasi HP</div><div class="teks-kecil" style="margin:4px 0 10px">${peta[1]}</div>${peta[2]}</div>`;
+    wadah.innerHTML = `<div class="push-kotak"><div class="push-judul">${peta[0]}<span>Notifikasi HP</span></div><div class="teks-kecil" style="margin:4px 0 10px">${peta[1]}</div>${peta[2]}</div>`;
     const b = wadah.querySelector('#btnPush');
     if (b) b.addEventListener('click', async () => {
       b.disabled = true;
@@ -113,7 +113,7 @@
     const html = !siap
       ? '<div class="kosong">Memuat notifikasi…</div>'
       : !daftar.length
-        ? '<div class="kosong"><div style="font-size:34px">🎉</div><div>Tidak ada notifikasi.<br>Semua PO masih dalam batas waktu atau sudah diterima penuh.</div></div>'
+        ? `<div class="kosong">${ikon.centang}<div>Tidak ada notifikasi.<br>Semua PO masih dalam batas waktu atau sudah diterima penuh.</div></div>`
         : `<div class="teks-kecil" style="margin-bottom:10px">Reminder PO &gt; 3 hari belum full received. Bot juga mengirimnya ke grup Partman tiap pagi 09:00 WIB.</div>` +
           daftar.map(n => item(n, !sudah.has(n.id))).join('');
     sheet.buka('Notifikasi', html + '<div id="kotakPush"></div>');

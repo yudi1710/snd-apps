@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#F4F6FB" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0E1020" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F5F6F8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0D1017" media="(prefers-color-scheme: dark)">
 <meta name="color-scheme" content="light dark">
 <meta name="description" content="SND Apps — workspace tim Supply & Demand Otoklix">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -15,8 +15,9 @@
 <link rel="icon" href="./icons/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./css/app.css?v=2026.11.15l">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./css/app.css?v=2026.11.16a">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -24,18 +25,19 @@
   Kerangka halaman. Fitur baru = satu file js/page-<nama>.js yang memanggil App.daftar({...}),
   lalu tambahkan <script src> di bawah. Menu & navigasi dibuat otomatis.
 -->
+<a class="lompat" href="#view">Lompat ke konten</a>
 <div class="shell" id="shell">
   <aside class="sidebar" id="sidebar" aria-label="Menu utama">
     <div class="merek">
       <img src="./icons/favicon.svg" alt="" width="34" height="34">
       <div><div class="merek-judul">SND Apps</div><div class="merek-sub">Supply &amp; Demand · Otoklix</div></div>
-      <button type="button" class="tombol-ikon ciut-tombol hanya-desktop" id="btnCiut" aria-label="Ciutkan menu" title="Ciutkan menu"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <button type="button" class="tombol-ikon ciut-tombol hanya-desktop" id="btnCiut" aria-label="Ciutkan menu" title="Ciutkan menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
     </div>
     <nav class="nav-samping" id="navSamping"></nav>
     <div class="sidebar-kaki">
       <div class="avatar" id="avatarSamping"></div>
       <div class="pengguna"><div class="pengguna-nama" id="namaSamping"></div><div class="pengguna-email" id="emailSamping"></div></div>
-      <button class="tombol-ikon" id="btnKeluar" title="Keluar" aria-label="Keluar"><svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3M13 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg></button>
+      <button class="tombol-ikon" id="btnKeluar" title="Keluar" aria-label="Keluar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M13 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg></button>
     </div>
     <div class="teks-kecil" id="versiApp" style="padding:8px 8px 0"></div>
   </aside>
@@ -44,16 +46,16 @@
   <div class="konten">
     <header class="appbar">
       <button class="tombol-ikon hanya-mobile" id="btnMenu" aria-label="Buka menu">
-        <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
       </button>
       <div class="appbar-judul">
         <h1 id="judulHal">SND Apps</h1>
         <div class="appbar-sub" id="subHal"></div>
       </div>
-      <button type="button" class="tombol-ikon lonceng" id="btnNotif" aria-label="Notifikasi" title="Notifikasi"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 21h4"/></svg><span class="lencana" id="lencana"></span></button>
+      <button type="button" class="tombol-ikon lonceng" id="btnNotif" aria-label="Notifikasi" title="Notifikasi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 21h4"/></svg><span class="lencana" id="lencana"></span></button>
       <div class="appbar-aksi" id="aksiHal"></div>
     </header>
-    <main class="view" id="view"></main>
+    <main class="view" id="view" tabindex="-1"></main>
   </div>
 
   <nav class="bottomnav" id="bottomnav" aria-label="Navigasi"></nav>
@@ -73,21 +75,21 @@
 
 <div class="sheet" id="sheet" aria-hidden="true">
   <div class="sheet-latar" data-tutup></div>
-  <div class="sheet-isi" role="dialog" aria-modal="true">
+  <div class="sheet-isi" role="dialog" aria-modal="true" aria-labelledby="sheetJudul">
     <div class="sheet-pegangan"></div>
-    <div class="sheet-kepala"><div class="sheet-judul" id="sheetJudul"></div><button class="tombol-ikon" data-tutup aria-label="Tutup"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-kepala"><div class="sheet-judul" id="sheetJudul"></div><button class="tombol-ikon" data-tutup aria-label="Tutup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="sheet-badan" id="sheetBadan"></div>
   </div>
 </div>
-<div class="toast" id="toast" role="status"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script src="./js/config.js?v=2026.11.15l"></script>
-<script src="./js/ekspor.js?v=2026.11.15l"></script>
-<script src="./js/app.js?v=2026.11.15l"></script>
-<script src="./js/page-beranda.js?v=2026.11.15l"></script>
-<script src="./js/page-monitoring.js?v=2026.11.15l"></script>
-<script src="./js/page-ks.js?v=2026.11.15l"></script>
-<script src="./js/notif.js?v=2026.11.15l"></script>
+<script src="./js/config.js?v=2026.11.16a"></script>
+<script src="./js/ekspor.js?v=2026.11.16a"></script>
+<script src="./js/app.js?v=2026.11.16a"></script>
+<script src="./js/page-beranda.js?v=2026.11.16a"></script>
+<script src="./js/page-monitoring.js?v=2026.11.16a"></script>
+<script src="./js/page-ks.js?v=2026.11.16a"></script>
+<script src="./js/notif.js?v=2026.11.16a"></script>
 <script>App.mulai();</script>
 </body>
 </html>
