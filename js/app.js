@@ -105,6 +105,7 @@ window.App = (function () {
         auto_select: true,
         itp_support: true,
         use_fedcm_for_prompt: true,
+        use_fedcm_for_button: true, // tanpa popup (popup tidak jalan di APK/TWA, berakhir di about:blank)
         callback: r => { if (simpanToken(r.credential)) callback(); },
       });
       gisSiap = true;
@@ -117,9 +118,20 @@ window.App = (function () {
     google.accounts.id.prompt();
   }
 
+  /** Berjalan sebagai app terinstal (APK/TWA atau PWA)? Di sana popup tidak bisa dipakai. */
+  const modeApp = () => !!(window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+
   function tampilLogin(pesan) {
     $('login').classList.add('tampil');
     $('loginPesan').textContent = pesan || '';
+    const alt = $('btnMasukAlt');
+    if (alt && modeApp() && !alt.dataset.utama) {
+      // di APK: halaman pilih akun Google (pindah halaman penuh) jadi tombol utama, di atas tombol Google biasa
+      alt.dataset.utama = '1';
+      alt.textContent = 'Masuk dengan akun Google';
+      alt.classList.add('utama');
+      $('tombolGoogle').before(alt);
+    }
     siapkanGIS(() => { $('login').classList.remove('tampil'); setelahMasuk(); });
   }
 
