@@ -52,41 +52,6 @@ window.App = (function () {
     } catch (e) { return false; }
   }
 
-  // ---------- login cadangan: halaman pilih akun Google (tanpa iframe) ----------
-  // Dipakai kalau tombol Google di dalam app tidak menampilkan akun yang sudah login di Chrome.
-  // Alur OIDC implicit: Google mengembalikan id_token di fragmen URL, nonce dicocokkan di sini.
-  function masukRedirect() {
-    const nonce = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now());
-    sessionStorage.setItem('snd_nonce', nonce);
-    location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
-      client_id: CFG.clientId,
-      redirect_uri: location.origin + '/',
-      response_type: 'id_token',
-      scope: 'openid email profile',
-      nonce,
-      prompt: 'select_account',
-      hd: CFG.domain,
-    });
-  }
-
-  /** Kalau halaman dibuka dari redirect Google (#id_token=...), ambil tokennya. */
-  function terimaRedirect() {
-    const m = location.hash.match(/[#&]id_token=([^&]+)/);
-    const galat = location.hash.match(/[#&]error=([^&]+)/);
-    if (!m && !galat) return false;
-    const bersih = () => { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} };
-    const nonceAsli = sessionStorage.getItem('snd_nonce');
-    sessionStorage.removeItem('snd_nonce');
-    bersih();
-    if (galat) { toast('Login dibatalkan atau ditolak Google (' + decodeURIComponent(galat[1]) + ').', true); return false; }
-    try {
-      const token = decodeURIComponent(m[1]);
-      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-      if (!nonceAsli || payload.nonce !== nonceAsli) { toast('Login tidak valid (nonce berbeda), coba lagi.', true); return false; }
-      return simpanToken(token);
-    } catch (e) { return false; }
-  }
-
   function muatTokenTersimpan() {
     const t = sessionStorage.getItem('snd_token');
     if (t && simpanToken(t) && tokenValid()) return true;
@@ -102,10 +67,9 @@ window.App = (function () {
       google.accounts.id.initialize({
         client_id: CFG.clientId,
         hd: CFG.domain,
-        auto_select: false, // jangan memilih akun otomatis: biarkan pengguna memilih (HP bisa punya beberapa akun @otoklix.com)
+        auto_select: true,
         itp_support: true,
         use_fedcm_for_prompt: true,
-        use_fedcm_for_button: true, // tanpa popup (popup tidak jalan di APK/TWA, berakhir di about:blank)
         callback: r => { if (simpanToken(r.credential)) callback(); },
       });
       gisSiap = true;
@@ -115,23 +79,12 @@ window.App = (function () {
       wadah.innerHTML = '';
       google.accounts.id.renderButton(wadah, { theme: 'filled_blue', size: 'large', shape: 'pill', text: 'signin_with', width: Math.max(200, Math.min(360, Math.floor(wadah.clientWidth || 280))), locale: 'id', logo_alignment: 'left' });
     }
-    // tanpa google.accounts.id.prompt(): One Tap otomatis menebak akun terakhir, di APK malah salah pilih akun
+    google.accounts.id.prompt();
   }
-
-  /** Berjalan sebagai app terinstal (APK/TWA atau PWA)? Di sana popup tidak bisa dipakai. */
-  const modeApp = () => !!(window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
 
   function tampilLogin(pesan) {
     $('login').classList.add('tampil');
     $('loginPesan').textContent = pesan || '';
-    const alt = $('btnMasukAlt');
-    if (alt && modeApp() && !alt.dataset.utama) {
-      // di APK: halaman pilih akun Google (pindah halaman penuh) jadi tombol utama, di atas tombol Google biasa
-      alt.dataset.utama = '1';
-      alt.textContent = 'Masuk dengan akun Google';
-      alt.classList.add('utama');
-      $('tombolGoogle').before(alt);
-    }
     siapkanGIS(() => { $('login').classList.remove('tampil'); setelahMasuk(); });
   }
 
@@ -205,52 +158,6 @@ window.App = (function () {
   function simpanSesi(s) {
     state.sesi = s.sesi; state.sesiExp = s.exp;
     try { localStorage.setItem(SESI_KEY, JSON.stringify({ sesi: s.sesi, exp: s.exp, email: s.email, nama: s.nama })); } catch (e) {}
-  }
-
-  // ---------- kode masuk sekali pakai: pindahkan login dari Chrome ke APK ----------
-  /** Di perangkat yang sudah login (Chrome): buat kode 5 menit. */
-  async function tampilKode() {
-    sheet.buka('Kode masuk untuk perangkat lain', '<div class="kosong" style="padding:24px">Membuat kode…</div>');
-    try {
-      const k = await api('buatKodeMasuk');
-      const habis = Date.now() + k.berlakuDetik * 1000;
-      sheet.badan().innerHTML = `
-        <div class="teks-kecil" style="margin-bottom:10px">Di perangkat lain (mis. APK), pilih <b>"Punya kode masuk dari Chrome?"</b> lalu ketik kode ini. Berlaku 5 menit dan hanya bisa dipakai sekali.</div>
-        <div class="kode-besar" id="kodeBesar">${esc(k.kode)}</div>
-        <div class="teks-kecil" id="kodeSisa" style="text-align:center;margin:8px 0 14px"></div>
-        <button type="button" class="tombol penuh" id="btnSalinKode">Salin kode</button>`;
-      const sisa = () => {
-        const d = Math.max(0, Math.round((habis - Date.now()) / 1000));
-        const el = document.getElementById('kodeSisa');
-        if (!el) return clearInterval(tm);
-        el.textContent = d ? `Berlaku ${Math.floor(d / 60)}:${String(d % 60).padStart(2, '0')} lagi` : 'Kode sudah habis. Tutup lalu buat kode baru.';
-      };
-      const tm = setInterval(sisa, 1000); sisa();
-      document.getElementById('btnSalinKode').addEventListener('click', () => {
-        (navigator.clipboard ? navigator.clipboard.writeText(k.kode) : Promise.reject()).then(() => toast('Kode disalin.'), () => toast('Salin manual: ' + k.kode));
-      });
-    } catch (e) {
-      sheet.badan().innerHTML = `<div class="kosong">${esc(e.message || 'Gagal membuat kode.')}</div>`;
-    }
-  }
-
-  /** Di perangkat yang belum login (APK): tukar kode dengan sesi 7 hari. */
-  async function tukarKodeMasuk() {
-    const kode = $('inputKode').value.trim();
-    if (kode.replace(/[^A-Za-z0-9]/g, '').length !== 10) { $('loginPesan').textContent = 'Kode terdiri dari 10 karakter (XXXXX-XXXXX).'; return; }
-    const b = $('btnTukarKode');
-    b.disabled = true;
-    $('loginPesan').textContent = 'Memeriksa kode…';
-    try {
-      const s = await panggil({}, 'tukarKode', [kode]);
-      simpanSesi(s);
-      state.email = s.email; state.nama = s.nama || '';
-      $('login').classList.remove('tampil');
-      setelahMasuk();
-    } catch (e) {
-      $('loginPesan').textContent = e.message || 'Kode ditolak.';
-    }
-    b.disabled = false;
   }
 
   // ---------- cache offline (localStorage, per akun) ----------
@@ -424,13 +331,7 @@ window.App = (function () {
       $('loginPesan').textContent = 'Konfigurasi belum lengkap: isi apiUrl dan clientId di js/config.js.';
       return;
     }
-    const alt = $('btnMasukAlt');
-    if (alt) alt.addEventListener('click', masukRedirect);
-    $('btnKode').addEventListener('click', () => { tutupLaci(); tampilKode(); });
-    $('btnKodeLogin').addEventListener('click', () => { const k = $('kotakKode'); k.hidden = !k.hidden; if (!k.hidden) $('inputKode').focus(); });
-    $('btnTukarKode').addEventListener('click', tukarKodeMasuk);
-    $('inputKode').addEventListener('keydown', e => { if (e.key === 'Enter') tukarKodeMasuk(); });
-    if (terimaRedirect() || muatSesi() || muatTokenTersimpan()) setelahMasuk(); else tampilLogin('');
+    if (muatSesi() || muatTokenTersimpan()) setelahMasuk(); else tampilLogin('');
   }
 
   return { daftar, halaman: () => halaman, buka, mulai, api, ambil, isi, toast, sheet, keluar, esc, angka, rp, tanggal, hariAntara, ikon, state, $ };
