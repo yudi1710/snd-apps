@@ -37,6 +37,7 @@ window.App = (function () {
     panah: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
     pin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>',
     loncengMati: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 9.3-5M18 8c0 4 1 6 2 7H8M10 21h4M3 3l18 18"/></svg>',
+    tambah: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
     unduh: '<svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg>',
     keluar: '<svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3M13 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg>',
   };

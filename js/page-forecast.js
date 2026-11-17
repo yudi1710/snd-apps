@@ -17,6 +17,7 @@
   let DATA = null;
   let KS = null; // Map kode -> balance KS Cinere (stok terkini dari menu KS)
   let infoKS = '';
+  let KSRows = null; // baris KS semua cabang, untuk memilih part tambahan
   let ui = null;
   let p = Object.assign({ naik: 100, cadangan: 30, ltDefault: 7, metode: 'rata', lain: false }, (() => { try { return JSON.parse(localStorage.getItem(KUNCI)) || {}; } catch (e) { return {}; } })());
 
@@ -39,6 +40,7 @@
     const h = r[12] || manual || null;
     return { kode: r[0], nama: r[1], base, fc, lt, ltAsli: r[9] != null, stok, dariKS, target, order, cover, bulan: r.slice(2, 8), po: r[10], sumber: r[11], fast: /fast/i.test(r[11] || ''),
       harga: h, hargaManual: !r[12] && !!manual, hargaNormal: r[13] || null,
+      hargaInfo: (DATA.hargaInfo || {})[r[0].toUpperCase()] || null, tambahan: (DATA.tambahan || {})[r[0].toUpperCase()] || null,
       nilai: h ? order * h : null,
       o1: Math.ceil(order / 2), o2: order - Math.ceil(order / 2), // Order Pertama (dibulatkan ke atas) dan Order Kedua
       n1: h ? Math.ceil(order / 2) * h : null, n2: h ? (order - Math.ceil(order / 2)) * h : null };
@@ -56,6 +58,7 @@
     ['Cara hitung: baseline', 'Baseline 1 shift = pemakaian tiga bulan penuh terakhir dari tab Outgoing Part (bulan berjalan tidak dihitung karena belum penuh), dirata-rata atau diambil mediannya. Pemakaian negatif karena retur dihitung 0. Forecast per bulan = baseline × (1 + kenaikan%).'],
     ['Cara hitung: target dan saran order', 'Pemakaian per hari = forecast per bulan ÷ 26 hari kerja. Lead time = rata-rata jarak hari dari PO dibuat sampai barang diterima (riwayat PO VinFast per part; kalau belum ada pakai lead time bawaan). Target stok = forecast 1 bulan + pemakaian per hari × lead time × (1 + pengaman%). Saran order = target stok − stok Cinere sekarang (minimal 0). Artinya stok harus cukup untuk bertahan sampai barang datang (plus pengaman) dan melayani 1 bulan setelahnya.'],
     ['Cara hitung: harga dan total', 'Harga per pcs = harga wholesale, yaitu harga beli (sebelum pajak) pada PO terakhir part itu di tab Incoming Part. Total = saran order × harga. Pembagian dua tahap: Order 1 (Order Pertama) = separuh saran order dibulatkan ke atas, Order 2 (Order Kedua) = sisanya, jadi dua tahap pemesanan dengan total sama dengan saran order. Pembagian ini default 50:50; kalau mau memecah dengan komposisi lain, sesuaikan manual di Excel. Part yang belum pernah di-PO belum punya harga dan ditandai "isi harga": klik barisnya, isi Harga manual / pcs di rincian, lalu Simpan harga. Harga manual tersimpan di server (semua pengguna melihat yang sama), tidak hilang saat Sinkron, ditandai ✎, dan otomatis diganti harga PO begitu part itu sudah pernah di-PO. Estimasi nilai order di ringkasan adalah jumlah total semua part yang punya harga.'],
+    ['Part tambahan dan riwayat', 'Part di luar daftar Fast Move bisa ditambahkan: tekan tombol + di pojok kanan atas, cari kode atau nama (daftar diambil dari KS semua cabang), lalu klik partnya. Server membaca MRP Cinere lagi (bisa sampai satu menit) sehingga pemakaian dan lead time part itu langsung terhitung. Harga mengikuti PO terakhir di Incoming Part Cinere; kalau belum pernah di-PO, isi harga manual di rincian. Part tambahan bisa dikeluarkan lewat tombol Hapus dari forecast di rinciannya. Semua akun boleh mengisi harga, menambah, dan menghapus part; setiap perubahan tercatat (siapa, kapan, dari berapa ke berapa) dan tampil di bagian Riwayat perubahan pada rincian part. Excel memuat kolom Harga diisi oleh dan Sumber part.'],
     ['Contoh', 'Baseline 40 pcs/bulan, kenaikan 50% (×1,5), lead time 20 hari, pengaman 30%, stok 20 pcs, harga Rp 100.000. Forecast = 60 pcs/bulan (±2,3 pcs/hari). Pemakaian selama 26 hari (20 × 1,3) = ±60 pcs. Target = 60 + 60 = 120 pcs. Saran order = 120 − 20 = 100 pcs. Total = 100 × Rp 100.000 = Rp 10.000.000.'],
     ['Catatan dan batasan', 'Daftar part adalah part berlabel Fast Move di tab Moving MRP Cinere; HANKOOK dan Massive/Massiv EV dikecualikan. Pemakaian beberapa part bergelombang (misalnya 240 pcs di satu bulan lalu 3 dan 0), sehingga rata-rata bisa menyesatkan; coba baseline median dan cek rincian bulanannya. Stok mengikuti KS terkini (kalau part tidak ada di KS dipakai angka snapshot dari sinkron). Ini alat bantu perkiraan, keputusan order tetap perlu dicek manual.'],
   ];
@@ -72,10 +75,11 @@
     Ekspor.unduh(Ekspor.namaDenganTanggal('snd-forecast-cinere'), [
       {
         nama: 'Forecast',
-        kolom: ['Kode Part', 'Nama Part', ...[0, 1, 2, 3, 4, 5].map(i => lblBulan(i) + (i < 2 ? '*' : i === 5 ? '* (parsial)' : '')), 'Baseline 1 shift/bln', 'Pengali', 'Forecast/bln', 'Pemakaian/hari', 'Lead time (hari)', 'Sumber lead time', 'Cadangan (hari)', 'Target stok', 'Stok Cinere (KS)', 'Cukup (hari kerja)', 'Saran order', 'Harga Wholesale/pcs', 'Harga Normal/pcs', 'Total Saran Order (Rp)', 'Order Pertama (pcs)', 'Total Order Pertama (Rp)', 'Order Kedua (pcs)', 'Total Order Kedua (Rp)', 'Sumber harga'],
+        kolom: ['Kode Part', 'Nama Part', ...[0, 1, 2, 3, 4, 5].map(i => lblBulan(i) + (i < 2 ? '*' : i === 5 ? '* (parsial)' : '')), 'Baseline 1 shift/bln', 'Pengali', 'Forecast/bln', 'Pemakaian/hari', 'Lead time (hari)', 'Sumber lead time', 'Cadangan (hari)', 'Target stok', 'Stok Cinere (KS)', 'Cukup (hari kerja)', 'Saran order', 'Harga Wholesale/pcs', 'Harga Normal/pcs', 'Total Saran Order (Rp)', 'Order Pertama (pcs)', 'Total Order Pertama (Rp)', 'Order Kedua (pcs)', 'Total Order Kedua (Rp)', 'Sumber harga', 'Harga diisi oleh', 'Sumber part'],
         baris: h.map(x => [x.kode, x.nama, ...bulan(x), Math.round(x.base * 10) / 10, mult(), Math.round(x.fc * 10) / 10, Math.round(x.fc / HARI_KERJA * 100) / 100,
           x.lt, x.ltAsli ? x.po + ' PO' : 'bawaan', Math.round(x.lt * p.cadangan / 100 * 10) / 10, x.target, x.stok, x.cover == null ? '' : Math.round(x.cover * 10) / 10, x.order,
           x.harga || '', x.hargaNormal || '', x.harga ? Math.round(x.nilai) : '', x.o1, x.harga ? x.n1 : '', x.o2, x.harga ? x.n2 : '', x.hargaManual ? 'Manual' : x.harga ? 'PO terakhir' : 'Belum ada',
+          x.hargaManual && x.hargaInfo ? x.hargaInfo.oleh + ' · ' + x.hargaInfo.waktu : '', x.tambahan ? 'Tambahan' : 'Fast Move',
           ]),
       },
       {
@@ -104,7 +108,8 @@
 
   function render(el, u) {
     ui = u;
-    u.setAksi(`<button type="button" class="tombol-ikon" id="btnSinkron" title="Sinkron data dari MRP Cinere" aria-label="Sinkron data dari MRP Cinere">${ikon.sync}</button>
+    u.setAksi(`<button type="button" class="tombol-ikon" id="btnTambah" title="Tambah part dari KS" aria-label="Tambah part dari KS">${ikon.tambah}</button>
+      <button type="button" class="tombol-ikon" id="btnSinkron" title="Sinkron data dari MRP Cinere" aria-label="Sinkron data dari MRP Cinere">${ikon.sync}</button>
       <button type="button" class="tombol-ikon" id="btnPanduan" title="Panduan forecasting" aria-label="Panduan forecasting">${ikon.kartu}</button>
       <button type="button" class="tombol-ikon" id="btnEkspor" title="Ekspor ke Excel" aria-label="Ekspor ke Excel">${ikon.unduh}</button>`);
     el.innerHTML = `
@@ -125,6 +130,7 @@
       <section class="bagian" id="fcRingkas" aria-label="Ringkasan"></section>
       <section class="bagian" aria-label="Daftar part"><div class="daftar" id="fcDaftar"><div class="kosong">${ikon.kosong}<div>Memuat data…</div></div></div></section>`;
     $('btnSinkron').addEventListener('click', sinkron);
+    $('btnTambah').addEventListener('click', pilihPart);
     $('btnPanduan').addEventListener('click', panduan);
     $('btnEkspor').addEventListener('click', ekspor);
     const simpan = () => { try { localStorage.setItem(KUNCI, JSON.stringify(p)); } catch (e) {} };
@@ -153,6 +159,7 @@
   function terap(d, ks) {
     DATA = d;
     KS = null; infoKS = '';
+    KSRows = ks && ks.rows ? ks.rows : null;
     if (ks && ks.rows) {
       KS = new Map();
       ks.rows.forEach(x => { if (String(x[0]).toUpperCase() === 'CINERE') { const k = String(x[1]).trim().toUpperCase(); KS.set(k, (KS.get(k) || 0) + (Number(x[7]) || 0)); } });
@@ -194,7 +201,7 @@
     if (!h.length) { $('fcRingkas').innerHTML = ''; $('fcDaftar').innerHTML = `<div class="kosong">${ikon.kosong}<div>Data forecast belum ada. Tekan Sinkron untuk mengambil dari MRP Cinere.</div><button type="button" class="tombol" id="sinkronKosong">Sinkron sekarang</button></div>`; const sk = $('sinkronKosong'); if (sk) sk.addEventListener('click', sinkron); return; }
     const tot = h.reduce((s, x) => ({ base: s.base + x.base, fc: s.fc + x.fc, order: s.order + x.order, perlu: s.perlu + (x.order > 0 ? 1 : 0), nilai: s.nilai + (x.nilai || 0), n1: s.n1 + (x.n1 || 0), n2: s.n2 + (x.n2 || 0), tanpaHarga: s.tanpaHarga + (x.order > 0 && !x.harga ? 1 : 0) }), { base: 0, fc: 0, order: 0, perlu: 0, nilai: 0, n1: 0, n2: 0, tanpaHarga: 0 });
     $('fcRingkas').innerHTML = `<div class="fc-tiles">
-      <div class="fc-tile"><small>Part Fast Move</small><b>${angka(h.length)}</b></div>
+      <div class="fc-tile"><small>Part</small><b>${angka(h.length)}</b></div>
       <div class="fc-tile"><small>Pemakaian 1 shift / bln</small><b>${angka(Math.round(tot.base))}</b><span>pcs</span></div>
       <div class="fc-tile"><small>Skenario ${esc(namaSkenario())} / bln</small><b>${angka(Math.round(tot.fc))}</b><span>pcs</span></div>
       <div class="fc-tile"><small>Perlu order</small><b>${angka(tot.perlu)}</b><span>${angka(tot.order)} pcs</span></div>
@@ -240,13 +247,26 @@
       ${x.order > 0 ? `<div class="detail-baris"><span>Order pertama (${angka(x.o1)} pcs)</span><span>${rp(x.n1)}</span></div>
       <div class="detail-baris"><span>Order kedua (${angka(x.o2)} pcs)</span><span>${rp(x.n2)}</span></div>` : ''}
 
-      <div class="teks-kecil">${x.hargaManual ? 'Harga ini diisi manual. Akan diganti otomatis kalau part ini sudah punya harga dari PO.' : 'Harga wholesale = harga beli PO terakhir dari VinFast.'}</div>` : `<div class="teks-kecil">Belum ada harga untuk part ini (belum pernah di-PO). Isi manual di bawah supaya total order ikut terhitung.</div>`}
+      <div class="teks-kecil">${x.hargaManual ? 'Harga ini diisi manual' + (x.hargaInfo ? ' oleh <b>' + esc(x.hargaInfo.oleh) + '</b> (' + esc(x.hargaInfo.waktu) + ')' : '') + '. Akan diganti otomatis kalau part ini sudah punya harga dari PO.' : 'Harga wholesale = harga beli PO terakhir (tab Incoming Part MRP Cinere).'}</div>` : `<div class="teks-kecil">Belum ada harga untuk part ini (belum pernah di-PO di MRP Cinere). Isi manual di bawah supaya total order ikut terhitung.</div>`}
       ${!x.hargaManual && x.harga ? '' : `<div class="fc-grup" style="margin-top:10px"><label class="fc-label" for="fcHargaIn">Harga manual / pcs (Rp)</label>
         <input class="input" id="fcHargaIn" type="number" min="0" step="1" inputmode="numeric" placeholder="mis. 150000" value="${x.hargaManual ? x.harga : ''}">
-        <div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="tombol" id="fcHargaSimpan">Simpan harga</button>${x.hargaManual ? '<button type="button" class="tombol halus" id="fcHargaHapus">Hapus</button>' : ''}</div></div>`}`);
-    const sim = $('fcHargaSimpan'), hap = $('fcHargaHapus');
+        <div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="tombol" id="fcHargaSimpan">Simpan harga</button>${x.hargaManual ? '<button type="button" class="tombol halus" id="fcHargaHapus">Hapus</button>' : ''}</div></div>`}
+      ${x.tambahan ? `<div class="pemisah"></div><h3 class="judul-kecil">Part tambahan</h3>
+        <div class="detail-baris"><span>Ditambahkan oleh</span><span>${esc(x.tambahan.oleh)} · ${esc(x.tambahan.waktu)}</span></div>
+        <div style="margin-top:8px"><button type="button" class="tombol halus" id="fcHapusPart">Hapus dari forecast</button></div>` : ''}
+      <div class="pemisah"></div>
+      <h3 class="judul-kecil">Riwayat perubahan</h3>
+      <div class="teks-kecil" id="fcRiwayat">Memuat…</div>`);
+    const sim = $('fcHargaSimpan'), hap = $('fcHargaHapus'), hp = $('fcHapusPart');
     if (sim) sim.addEventListener('click', () => simpanHarga(x.kode, $('fcHargaIn').value));
     if (hap) hap.addEventListener('click', () => simpanHarga(x.kode, ''));
+    if (hp) hp.addEventListener('click', () => hapusPart(x.kode));
+    App.api('getRiwayatForecast', x.kode).then(list => {
+      const el = $('fcRiwayat'); if (!el) return;
+      const nama = e => esc(String(e || '').split('@')[0]);
+      const harga = v => v ? rp(v) : 'kosong';
+      el.innerHTML = list.length ? list.map(r => `<div class="detail-baris"><span>${esc(r.waktu)} · ${nama(r.email)}</span><span>${r.aksi === 'Harga' ? harga(r.lama) + ' → ' + (r.baru ? rp(r.baru) : 'dihapus') : r.aksi === 'Tambah part' ? 'menambah part' : 'menghapus part'}</span></div>`).join('') : 'Belum ada perubahan tercatat.';
+    }).catch(() => { const el = $('fcRiwayat'); if (el) el.textContent = 'Riwayat belum bisa dimuat.'; });
   }
 
   /** Simpan harga manual satu part ke server (dipakai semua pengguna), lalu hitung ulang tampilan. */
@@ -255,10 +275,58 @@
     if (!Number.isFinite(v) || v < 0) { App.toast('Harga tidak valid.', true); return; }
     App.api('simpanHargaForecast', kode, v).then(d => {
       DATA.hargaManual = d.hargaManual || {};
+      DATA.hargaInfo = d.hargaInfo || {};
       if (sheet.tutup) sheet.tutup();
       gambar();
       App.toast(v > 0 ? 'Harga ' + kode + ' disimpan: ' + rp(v) : 'Harga manual ' + kode + ' dihapus.');
     }).catch(e => App.toast(e.message || 'Gagal menyimpan harga.', true));
+  }
+
+  // ---------- part tambahan (dipilih dari KS) ----------
+  let sedangTambah = false;
+
+  function pilihPart() {
+    if (!DATA) return;
+    if (!KSRows) { App.toast('Data KS belum termuat, coba lagi sebentar.', true); return; }
+    const ada = new Set(DATA.rows.map(r => r[0].toUpperCase()));
+    const unik = new Map(); // kode -> { kode, nama }; satu entri per kode walau ada di banyak cabang
+    KSRows.forEach(r => { const k = String(r[1]).trim(), u = k.toUpperCase(); if (k && !ada.has(u) && !unik.has(u)) unik.set(u, { kode: k, nama: String(r[2] || '').trim() }); });
+    const semua = [...unik.values()].sort((a, b) => a.kode.localeCompare(b.kode));
+    sheet.buka('Tambah part ke forecast', `
+      <div class="teks-kecil" style="margin-bottom:8px">Pilih part dari KS semua cabang. Pemakaian dan lead time diambil otomatis dari MRP Cinere; harga ikut harga PO terakhir, kalau belum ada isi manual di rincian part.</div>
+      <input class="input" id="fcCariPart" type="search" placeholder="Cari kode atau nama part" autocomplete="off">
+      <div id="fcPilih" style="margin-top:10px"></div>`);
+    const gambarPilih = () => {
+      const q = $('fcCariPart').value.trim().toLowerCase();
+      const hasil = (q ? semua.filter(x => (x.kode + ' ' + x.nama).toLowerCase().includes(q)) : semua).slice(0, 40);
+      $('fcPilih').innerHTML = hasil.length
+        ? hasil.map(x => `<button type="button" class="fc-baris" data-tambah="${esc(x.kode)}" data-nama="${esc(x.nama)}"><span class="fc-part"><span class="fc-kode">${esc(x.kode)}</span><span class="fc-nama">${esc(x.nama)}</span></span></button>`).join('')
+        : '<div class="teks-kecil">Tidak ada part yang cocok (part yang sudah ada di forecast tidak ditampilkan).</div>';
+    };
+    $('fcCariPart').addEventListener('input', gambarPilih);
+    $('fcPilih').addEventListener('click', e => { const b = e.target.closest('[data-tambah]'); if (b) tambahPart(b.dataset.tambah, b.dataset.nama); });
+    gambarPilih();
+  }
+
+  function tambahPart(kode, nama) {
+    if (sedangTambah) return;
+    sedangTambah = true;
+    if (sheet.tutup) sheet.tutup();
+    App.toast('Menambahkan ' + kode + ' dan membaca MRP Cinere… (bisa sampai satu menit)');
+    App.api('tambahPartForecast', kode, nama).then(d => {
+      App.isi('getDataForecast', d);
+      terap(d, KSRows ? { rows: KSRows, update: infoKS } : null);
+      App.toast(kode + ' ditambahkan ke forecast.');
+    }).catch(e => App.toast(e.message || 'Gagal menambah part.', true)).finally(() => { sedangTambah = false; });
+  }
+
+  function hapusPart(kode) {
+    App.api('hapusPartForecast', kode).then(d => {
+      App.isi('getDataForecast', d);
+      terap(d, KSRows ? { rows: KSRows, update: infoKS } : null);
+      if (sheet.tutup) sheet.tutup();
+      App.toast(kode + ' dikeluarkan dari forecast.');
+    }).catch(e => App.toast(e.message || 'Gagal menghapus part.', true));
   }
 
   App.daftar({
