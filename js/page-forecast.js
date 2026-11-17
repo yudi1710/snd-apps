@@ -17,7 +17,6 @@
   let DATA = null;
   let KS = null; // Map kode -> balance KS Cinere (stok terkini dari menu KS)
   let infoKS = '';
-  let kelompok = 'semua'; // semua | fast | lain
   let ui = null;
   let p = Object.assign({ naik: 100, cadangan: 30, ltDefault: 7, metode: 'rata', lain: false }, (() => { try { return JSON.parse(localStorage.getItem(KUNCI)) || {}; } catch (e) { return {}; } })());
 
@@ -43,18 +42,18 @@
 
   // ---------- buku panduan (dipakai di aplikasi dan di sheet Panduan pada Excel) ----------
   const PANDUAN = [
-    ['Sinkron data', 'Tombol Sinkron (ikon panah putar) membaca ulang MRP Cinere: pemakaian per bulan (tab Outgoing Part), lead time dan harga (tab Incoming Part), daftar Fast Move (tab Moving), dan part yang direncanakan order bulan ini. Tekan Sinkron setiap kali mau membuat forecast baru, misalnya di awal bulan. Stok selalu diambil langsung dari menu KS, tidak perlu sinkron.'],
-    ['Tujuan', 'Memperkirakan kebutuhan part fast moving Cinere kalau jam kerja naik dari 1 shift ke 2 shift, lalu menghitung berapa yang perlu di-order ke VinFast supaya stok tidak habis.'],
-    ['Langkah 1: Baseline', 'Pemakaian per bulan dihitung dari tab Outgoing Part MRP Cinere . Baseline 1 shift = pemakaian tiga bulan penuh terakhir (bulan berjalan tidak dihitung; periodenya bergeser otomatis tiap bulan setelah Sinkron), rata-rata atau median (median tidak ikut tertarik lonjakan sekali jalan). Bulan yang lebih lama dari tiga bulan itu dan bulan berjalan (belum penuh) tidak masuk baseline. Daftar part terdiri dari Fast Move (berlabel Fast Move di tab Moving) dan part lain yang ikut direncanakan order bulan ini; gunakan filter Kelompok untuk memisahkannya. HANKOOK dan Massive/Massiv EV dikecualikan.'],
-    ['Langkah 2: Jumlah shift', 'Pilih 1 shift (pemakaian apa adanya) atau 2 shift (pemakaian naik 100%, jadi dua kali lipat). Untuk angka lain pilih Atur sendiri: isi berapa persen pemakaian naik dari 1 shift (0% = 1 shift, 50% = 1,5 kali, 100% = 2 shift). Forecast per bulan = baseline × (1 + kenaikan%). Angka kenaikan ini asumsi, cocokkan lagi dengan data nyata setelah 2 shift berjalan beberapa minggu.'],
-    ['Langkah 3: Pemakaian per hari', 'Pemakaian per hari = forecast per bulan ÷ 26 hari kerja.'],
-    ['Langkah 4: Lead time', 'Lead time = jarak hari dari PO dibuat sampai barang diterima di Cinere, rata-rata dari riwayat PO VinFast per part (tab Incoming Part). Part tanpa riwayat PO memakai lead time bawaan.'],
-    ['Langkah 5: Cadangan', 'Stok pengaman = tambahan stok sebagai persen dari lead time part itu. Contoh 30%: lead time 20 hari dapat cadangan 6 hari, lead time 2 hari dapat 0,6 hari. Pilihan: Tipis 15%, Normal 30%, Aman 50%. Pilih Aman kalau takut telat dari VinFast, Tipis kalau stok mau diketatkan.'],
-    ['Langkah 6: Target stok', 'Target stok = forecast 1 bulan + pemakaian per hari × lead time × (1 + cadangan%). Artinya stok harus cukup untuk bertahan sampai barang datang (plus pengaman) dan melayani 1 bulan setelahnya.'],
-    ['Langkah 7: Saran order', 'Saran order = target stok − stok Cinere sekarang (minimal 0). Daftar diurutkan dari yang paling perlu order.'],
-    ['Langkah 8: Harga dan total', 'Harga per pcs = harga wholesale, yaitu harga beli PO terakhir dari VinFast (harga normal ditampilkan di rincian bila ada). Total = saran order × harga wholesale. Order dibagi dua tahap: Order Pertama (setengah, dibulatkan ke atas) dan Order Kedua (sisanya). Part yang belum pernah di-PO belum punya harga, ditandai tanda strip.'],
-    ['Contoh', 'Baseline 40 pcs/bulan, kenaikan 50% (×1,5), lead time 20 hari, stok pengaman 30%, stok 20 pcs. Forecast = 60 pcs/bulan (2,3 pcs/hari). Pemakaian selama 26 hari (20 × 1,3) = ±60 pcs. Target = 60 + 60 = 120 pcs. Saran order = 120 − 20 = 100 pcs.'],
-    ['Batasan', 'Pemakaian beberapa part bergelombang (misalnya 240 pcs di satu bulan lalu 3 dan 0), sehingga rata-rata bisa menyesatkan; coba baseline median dan cek rincian bulanannya. Stok Cinere diambil dari balance menu KS (kartu stok Cinere), jadi mengikuti data KS terkini; part yang tidak ada di KS memakai angka snapshot dari tab Moving. Ini alat bantu perkiraan, keputusan order tetap perlu dicek manual. Data diperbarui oleh Stock Bot, lihat waktu pembaruan di bawah judul halaman.'],
+    ['Gambaran alur', 'Alur membuat forecast dari awal sampai jadi: (1) Sinkron data, (2) pilih jumlah shift, (3) pilih stok pengaman, (4) baca ringkasan dan tabel, (5) buka rincian part bila perlu, (6) Export Excel. Seluruhnya untuk part Fast Move Cinere.'],
+    ['Langkah 1: Sinkron data', 'Tekan tombol Sinkron (ikon panah putar, pojok kanan atas halaman). Server membaca ulang MRP Cinere: pemakaian per bulan (tab Outgoing Part), lead time dan harga beli (tab Incoming Part), serta daftar Fast Move (tab Moving). Proses bisa sampai satu menit, tunggu sampai muncul pesan "Sinkron selesai". Lakukan Sinkron setiap mau membuat forecast baru, misalnya di awal bulan. Periode baseline ikut bergeser otomatis ke tiga bulan penuh terakhir. Waktu sinkron terakhir tampil di bawah judul halaman. Stok tidak perlu disinkron karena selalu diambil langsung dari menu KS.'],
+    ['Langkah 2: Pilih jumlah shift', 'Pilih 1 shift (pemakaian apa adanya) atau 2 shift (pemakaian naik 100%, jadi dua kali lipat). Untuk angka lain pilih Atur sendiri, lalu isi berapa persen pemakaian naik dari 1 shift (0% = 1 shift, 50% = 1,5 kali, 100% = 2 shift). Angka kenaikan ini asumsi, cocokkan lagi dengan data nyata setelah shift tambahan berjalan beberapa minggu.'],
+    ['Langkah 3: Pilih stok pengaman', 'Stok pengaman = tambahan stok sebagai persen dari lead time part itu. Pilihan: Tipis 15%, Normal 30%, Aman 50%. Pilih Aman kalau takut barang telat dari VinFast, Tipis kalau stok mau diketatkan. Contoh Normal 30%: lead time 20 hari dapat pengaman 6 hari, lead time 2 hari dapat 0,6 hari. Di Pengaturan lanjutan ada lead time bila belum ada riwayat PO (bawaan 7 hari) dan cara hitung baseline (rata-rata atau median; median tidak ikut tertarik lonjakan sekali jalan).'],
+    ['Langkah 4: Baca ringkasan dan tabel', 'Kartu ringkasan: jumlah part, pemakaian 1 shift per bulan, hasil skenario per bulan, jumlah part yang perlu order, dan estimasi nilai order. Tabel diurutkan dari part yang paling perlu order. Kolom: 1 shift (pemakaian baseline per bulan), Skenario (forecast per bulan sesuai shift yang dipilih), Stok (balance KS Cinere sekarang, merah kalau 0), Saran order (pcs yang perlu dipesan, tulisan Cukup kalau stok sudah cukup), Harga/pcs, dan Total (Rp).'],
+    ['Langkah 5: Rincian part', 'Klik satu baris untuk membuka rincian: pemakaian tiap bulan, baseline, forecast, lead time (dan jumlah PO yang jadi dasarnya), stok pengaman, target stok, stok sekarang dan cukup berapa hari kerja, saran order, harga, total, serta pembagian Order Pertama dan Order Kedua (dibagi dua, pertama dibulatkan ke atas).'],
+    ['Langkah 6: Export Excel', 'Tekan tombol unduh (ikon panah ke bawah) untuk mengunduh file .xlsx berisi tiga sheet: Forecast (semua part lengkap dengan pemakaian bulanan, baseline, forecast, lead time, pengaman, target stok, stok, saran order, harga, total, order pertama dan kedua), Parameter (shift, pengaman, dan pengaturan yang dipakai saat unduh), dan Panduan (isi buku ini). Isi Excel mengikuti pengaturan di layar saat tombol ditekan, jadi atur dulu skenarionya baru unduh. Angka di Excel berupa hasil hitung, bukan rumus.'],
+    ['Cara hitung: baseline', 'Baseline 1 shift = pemakaian tiga bulan penuh terakhir dari tab Outgoing Part (bulan berjalan tidak dihitung karena belum penuh), dirata-rata atau diambil mediannya. Pemakaian negatif karena retur dihitung 0. Forecast per bulan = baseline × (1 + kenaikan%).'],
+    ['Cara hitung: target dan saran order', 'Pemakaian per hari = forecast per bulan ÷ 26 hari kerja. Lead time = rata-rata jarak hari dari PO dibuat sampai barang diterima (riwayat PO VinFast per part; kalau belum ada pakai lead time bawaan). Target stok = forecast 1 bulan + pemakaian per hari × lead time × (1 + pengaman%). Saran order = target stok − stok Cinere sekarang (minimal 0). Artinya stok harus cukup untuk bertahan sampai barang datang (plus pengaman) dan melayani 1 bulan setelahnya.'],
+    ['Cara hitung: harga dan total', 'Harga per pcs = harga wholesale, yaitu harga beli (sebelum pajak) pada PO terakhir part itu di tab Incoming Part. Total = saran order × harga. Part yang belum pernah di-PO belum punya harga dan ditandai strip. Estimasi nilai order di ringkasan adalah jumlah total semua part yang punya harga.'],
+    ['Contoh', 'Baseline 40 pcs/bulan, kenaikan 50% (×1,5), lead time 20 hari, pengaman 30%, stok 20 pcs, harga Rp 100.000. Forecast = 60 pcs/bulan (±2,3 pcs/hari). Pemakaian selama 26 hari (20 × 1,3) = ±60 pcs. Target = 60 + 60 = 120 pcs. Saran order = 120 − 20 = 100 pcs. Total = 100 × Rp 100.000 = Rp 10.000.000.'],
+    ['Catatan dan batasan', 'Daftar part adalah part berlabel Fast Move di tab Moving MRP Cinere; HANKOOK dan Massive/Massiv EV dikecualikan. Pemakaian beberapa part bergelombang (misalnya 240 pcs di satu bulan lalu 3 dan 0), sehingga rata-rata bisa menyesatkan; coba baseline median dan cek rincian bulanannya. Stok mengikuti KS terkini (kalau part tidak ada di KS dipakai angka snapshot dari sinkron). Ini alat bantu perkiraan, keputusan order tetap perlu dicek manual.'],
   ];
 
   function panduan() {
@@ -63,22 +62,17 @@
 
   function ekspor() {
     if (!DATA || !window.Ekspor) return;
-    const semua = DATA.rows.map(hitung);
-    const nFast = semua.filter(x => x.fast).length;
-    const bar = $('fcKelompok');
-    if (bar) bar.innerHTML = [['semua', 'Semua', semua.length], ['fast', 'Fast Move', nFast], ['lain', 'Part lain', semua.length - nFast]]
-      .map(([k, n, j]) => '<button type="button" class="chip' + (kelompok === k ? ' aktif' : '') + '" data-kel="' + k + '">' + n + '<b>' + j + '</b></button>').join('');
-    const h = semua.filter(x => kelompok === 'semua' || (kelompok === 'fast') === x.fast).sort((a, b) => b.order - a.order || b.fc - a.fc);
+    const h = DATA.rows.map(hitung).sort((a, b) => b.order - a.order || b.fc - a.fc);
     if (!h.length) { App.toast('Tidak ada data untuk diekspor.', true); return; }
     const bulan = x => x.bulan;
     Ekspor.unduh(Ekspor.namaDenganTanggal('snd-forecast-cinere'), [
       {
         nama: 'Forecast',
-        kolom: ['Kode Part', 'Nama Part', ...[0, 1, 2, 3, 4, 5].map(i => lblBulan(i) + (i < 2 ? '*' : i === 5 ? '* (parsial)' : '')), 'Baseline 1 shift/bln', 'Pengali', 'Forecast/bln', 'Pemakaian/hari', 'Lead time (hari)', 'Sumber lead time', 'Cadangan (hari)', 'Target stok', 'Stok Cinere (KS)', 'Cukup (hari kerja)', 'Saran order', 'Harga Wholesale/pcs', 'Harga Normal/pcs', 'Total Saran Order (Rp)', 'Order Pertama (pcs)', 'Total Order Pertama (Rp)', 'Order Kedua (pcs)', 'Total Order Kedua (Rp)', 'Kelompok'],
+        kolom: ['Kode Part', 'Nama Part', ...[0, 1, 2, 3, 4, 5].map(i => lblBulan(i) + (i < 2 ? '*' : i === 5 ? '* (parsial)' : '')), 'Baseline 1 shift/bln', 'Pengali', 'Forecast/bln', 'Pemakaian/hari', 'Lead time (hari)', 'Sumber lead time', 'Cadangan (hari)', 'Target stok', 'Stok Cinere (KS)', 'Cukup (hari kerja)', 'Saran order', 'Harga Wholesale/pcs', 'Harga Normal/pcs', 'Total Saran Order (Rp)', 'Order Pertama (pcs)', 'Total Order Pertama (Rp)', 'Order Kedua (pcs)', 'Total Order Kedua (Rp)'],
         baris: h.map(x => [x.kode, x.nama, ...bulan(x), Math.round(x.base * 10) / 10, mult(), Math.round(x.fc * 10) / 10, Math.round(x.fc / HARI_KERJA * 100) / 100,
           x.lt, x.ltAsli ? x.po + ' PO' : 'bawaan', Math.round(x.lt * p.cadangan / 100 * 10) / 10, x.target, x.stok, x.cover == null ? '' : Math.round(x.cover * 10) / 10, x.order,
           x.harga || '', x.hargaNormal || '', x.harga ? Math.round(x.nilai) : '', Math.ceil(x.order / 2), x.harga ? Math.ceil(x.order / 2) * x.harga : '', Math.floor(x.order / 2), x.harga ? Math.floor(x.order / 2) * x.harga : '',
-          x.fast ? 'Fast Move' : 'Part lain']),
+          ]),
       },
       {
         nama: 'Parameter',
@@ -125,7 +119,6 @@
         </div>
       </section>
       <section class="bagian" id="fcRingkas" aria-label="Ringkasan"></section>
-      <section class="bagian" aria-label="Filter kelompok"><div class="chips" id="fcKelompok"></div></section>
       <section class="bagian" aria-label="Daftar part"><div class="daftar" id="fcDaftar"><div class="kosong">${ikon.kosong}<div>Memuat data…</div></div></div></section>`;
     $('btnSinkron').addEventListener('click', sinkron);
     $('btnPanduan').addEventListener('click', panduan);
@@ -147,7 +140,6 @@
     });
     $('fcLt').addEventListener('input', e => { const v = parseFloat(e.target.value); p.ltDefault = Number.isFinite(v) ? Math.min(90, Math.max(0, v)) : 7; simpan(); gambar(); });
     $('fcMetode').addEventListener('change', e => { p.metode = e.target.value === 'median' ? 'median' : 'rata'; simpan(); gambar(); });
-    $('fcKelompok').addEventListener('click', e => { const c = e.target.closest('[data-kel]'); if (c) { kelompok = c.dataset.kel; gambar(); } });
     $('fcDaftar').addEventListener('click', e => { const k = e.target.closest('[data-kode]'); if (k) detail(k.dataset.kode); });
     if (DATA) { ui.setSub(subTeks()); gambar(); } else muat();
   }
@@ -194,16 +186,11 @@
 
   function gambar() {
     if (!DATA) return;
-    const semua = DATA.rows.map(hitung);
-    const nFast = semua.filter(x => x.fast).length;
-    const bar = $('fcKelompok');
-    if (bar) bar.innerHTML = [['semua', 'Semua', semua.length], ['fast', 'Fast Move', nFast], ['lain', 'Part lain', semua.length - nFast]]
-      .map(([k, n, j]) => '<button type="button" class="chip' + (kelompok === k ? ' aktif' : '') + '" data-kel="' + k + '">' + n + '<b>' + j + '</b></button>').join('');
-    const h = semua.filter(x => kelompok === 'semua' || (kelompok === 'fast') === x.fast).sort((a, b) => b.order - a.order || b.fc - a.fc);
-    if (!h.length) { $('fcRingkas').innerHTML = ''; $('fcDaftar').innerHTML = `<div class="kosong">${ikon.kosong}<div>${DATA.perluSinkron || !DATA.rows.length ? 'Data forecast belum ada. Tekan Sinkron untuk mengambil dari MRP Cinere.' : 'Tidak ada part di kelompok ini.'}</div><button type="button" class="tombol" id="sinkronKosong">Sinkron sekarang</button></div>`; const sk = $('sinkronKosong'); if (sk) sk.addEventListener('click', sinkron); return; }
+    const h = DATA.rows.map(hitung).sort((a, b) => b.order - a.order || b.fc - a.fc);
+    if (!h.length) { $('fcRingkas').innerHTML = ''; $('fcDaftar').innerHTML = `<div class="kosong">${ikon.kosong}<div>Data forecast belum ada. Tekan Sinkron untuk mengambil dari MRP Cinere.</div><button type="button" class="tombol" id="sinkronKosong">Sinkron sekarang</button></div>`; const sk = $('sinkronKosong'); if (sk) sk.addEventListener('click', sinkron); return; }
     const tot = h.reduce((s, x) => ({ base: s.base + x.base, fc: s.fc + x.fc, order: s.order + x.order, perlu: s.perlu + (x.order > 0 ? 1 : 0), nilai: s.nilai + (x.nilai || 0), tanpaHarga: s.tanpaHarga + (x.order > 0 && !x.harga ? 1 : 0) }), { base: 0, fc: 0, order: 0, perlu: 0, nilai: 0, tanpaHarga: 0 });
     $('fcRingkas').innerHTML = `<div class="fc-tiles">
-      <div class="fc-tile"><small>Jumlah part</small><b>${angka(h.length)}</b></div>
+      <div class="fc-tile"><small>Part Fast Move</small><b>${angka(h.length)}</b></div>
       <div class="fc-tile"><small>Pemakaian 1 shift / bln</small><b>${angka(Math.round(tot.base))}</b><span>pcs</span></div>
       <div class="fc-tile"><small>Skenario ${esc(namaSkenario())} / bln</small><b>${angka(Math.round(tot.fc))}</b><span>pcs</span></div>
       <div class="fc-tile"><small>Perlu order</small><b>${angka(tot.perlu)}</b><span>${angka(tot.order)} pcs</span></div>
@@ -230,7 +217,7 @@
       <div class="pemisah"></div>
       <h3 class="judul-kecil">Pemakaian Cinere (1 shift)</h3>
       ${x.bulan.map((v, i) => `<div class="detail-baris"><span>${nama[i]}</span><span>${angka(v)} pcs</span></div>`).join('')}
-      <div class="teks-kecil">Baseline = ${periodeBaseline()} (${p.metode === 'median' ? 'median' : 'rata-rata'}). *Tidak masuk baseline: bulan yang lebih lama dan bulan berjalan (belum penuh). Kelompok: ${x.fast ? 'Fast Move' : 'Part lain'}.</div>
+      <div class="teks-kecil">Baseline = ${periodeBaseline()} (${p.metode === 'median' ? 'median' : 'rata-rata'}). *Tidak masuk baseline: bulan yang lebih lama dan bulan berjalan (belum penuh).</div>
       <div class="pemisah"></div>
       <h3 class="judul-kecil">Skenario ×${desimal(mult())}</h3>
       <div class="detail-baris"><span>Baseline 1 shift / bulan</span><span>${desimal(x.base)} pcs</span></div>
@@ -253,7 +240,7 @@
 
   App.daftar({
     id: 'forecast', label: 'Forecast Cinere', pendek: 'Forecast', ikon: 'grafik',
-    desk: 'Perkiraan kebutuhan part fast moving Cinere untuk skenario 2 shift, lengkap dengan saran order.',
+    desk: 'Perkiraan kebutuhan part fast moving Cinere untuk skenario shift pilihan, lengkap dengan saran order dan harga.',
     render,
   });
 })();
