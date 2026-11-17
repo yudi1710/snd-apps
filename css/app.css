@@ -440,3 +440,9 @@ button.notif { font: inherit; color: inherit; }
 @media (min-width: 760px) {
   .fc-kepala, .fc-baris { grid-template-columns: minmax(0, 2.4fr) repeat(4, minmax(0, .8fr)) minmax(0, 1.1fr) minmax(0, 1.3fr); }
 }
+
+.fc-sub { display: block; font-size: 11px; font-weight: 400; color: var(--text-3); }
+.fc-o { color: var(--text); }
+@media (min-width: 760px) {
+  .fc-kepala, .fc-baris { grid-template-columns: minmax(0, 2.2fr) repeat(4, minmax(0, .75fr)) repeat(2, minmax(0, 1fr)) minmax(0, 1.2fr); }
+}
