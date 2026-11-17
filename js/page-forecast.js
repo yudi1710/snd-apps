@@ -1,15 +1,18 @@
 /**
  * Halaman: Forecast Cinere (fast moving, skenario 2 shift).
  * Data dasar dari tab "Forecast Cinere" (Stock Bot, dari Moving + Incoming Part MRP Cinere).
- * Baris: [kode, nama, juni, juli, agustus, september, oktober, november(parsial), stokSnapshot, leadTimeHari|null, jumlahPO, sumber, orderFR].
- * Pemakaian dari Outgoing Part. Baseline 1 shift = Agustus-Oktober (3 bulan);
- * Juni (data mulai 18 Juni), Juli (ada lonjakan sekali jalan), dan November (belum penuh) tidak masuk baseline.
+ * Baris: [kode, nama, m0..m5 (6 bulan, m5 = bulan berjalan), stokSnapshot, leadTimeHari|null, jumlahPO, sumber, hargaWholesale|null, hargaNormal|null].
+ * Label bulan dari DATA.bulan ('YYYY-MM'). Baseline 1 shift = 3 bulan penuh terakhir (m2..m4); m0, m1 (lebih lama) dan m5 (bulan berjalan, belum penuh) tidak masuk baseline.
+ * Tombol Sinkron memanggil backend (sinkronForecast) yang membaca ulang MRP Cinere, jadi periode baseline bergeser otomatis tiap bulan.
  * Jumlah shift, stok pengaman, dan lead time bawaan bisa diatur dan diingat di perangkat.
  */
 (function () {
   const { sheet, esc, angka, rp, ikon, $ } = App;
   const KUNCI = 'snd_fc_param4';
-  const BULAN_DIPAKAI = [4, 5, 6]; // indeks Agustus..Oktober di baris
+  const BULAN_DIPAKAI = [4, 5, 6]; // m2..m4 di baris: tiga bulan penuh terakhir
+  const NAMA_BLN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const lblBulan = i => { const k = DATA && DATA.bulan && DATA.bulan[i]; const m = /^(\d{4})-(\d{2})$/.exec(k || ''); return m ? NAMA_BLN[+m[2] - 1] + ' ' + m[1] : 'bulan ' + (i + 1); };
+  const periodeBaseline = () => lblBulan(2) + '–' + lblBulan(4);
   const HARI_KERJA = 26;
   let DATA = null;
   let KS = null; // Map kode -> balance KS Cinere (stok terkini dari menu KS)
@@ -34,14 +37,15 @@
     const order = Math.max(0, target - stok);
     const cover = perHari > 0 ? stok / perHari : null; // stok cukup berapa hari kerja
     return { kode: r[0], nama: r[1], base, fc, lt, ltAsli: r[9] != null, stok, dariKS, target, order, cover, bulan: r.slice(2, 8), po: r[10], sumber: r[11], fast: /fast/i.test(r[11] || ''),
-      harga: r[13] || null, hargaNormal: r[14] || null,
-      nilai: r[13] ? order * r[13] : null };
+      harga: r[12] || null, hargaNormal: r[13] || null,
+      nilai: r[12] ? order * r[12] : null };
   }
 
   // ---------- buku panduan (dipakai di aplikasi dan di sheet Panduan pada Excel) ----------
   const PANDUAN = [
+    ['Sinkron data', 'Tombol Sinkron (ikon panah putar) membaca ulang MRP Cinere: pemakaian per bulan (tab Outgoing Part), lead time dan harga (tab Incoming Part), daftar Fast Move (tab Moving), dan part yang direncanakan order bulan ini. Tekan Sinkron setiap kali mau membuat forecast baru, misalnya di awal bulan. Stok selalu diambil langsung dari menu KS, tidak perlu sinkron.'],
     ['Tujuan', 'Memperkirakan kebutuhan part fast moving Cinere kalau jam kerja naik dari 1 shift ke 2 shift, lalu menghitung berapa yang perlu di-order ke VinFast supaya stok tidak habis.'],
-    ['Langkah 1: Baseline', 'Pemakaian per bulan dihitung dari tab Outgoing Part MRP Cinere . Baseline 1 shift = pemakaian Agustus sampai Oktober, rata-rata atau median (median tidak ikut tertarik lonjakan sekali jalan). Tidak masuk baseline: Juni (data mulai 18 Juni), Juli (sering ada lonjakan), November (bulan berjalan, belum penuh). Daftar part terdiri dari Fast Move (berlabel Fast Move di tab Moving) dan part lain yang ikut direncanakan order bulan ini; gunakan filter Kelompok untuk memisahkannya. HANKOOK dan Massive/Massiv EV dikecualikan.'],
+    ['Langkah 1: Baseline', 'Pemakaian per bulan dihitung dari tab Outgoing Part MRP Cinere . Baseline 1 shift = pemakaian tiga bulan penuh terakhir (bulan berjalan tidak dihitung; periodenya bergeser otomatis tiap bulan setelah Sinkron), rata-rata atau median (median tidak ikut tertarik lonjakan sekali jalan). Bulan yang lebih lama dari tiga bulan itu dan bulan berjalan (belum penuh) tidak masuk baseline. Daftar part terdiri dari Fast Move (berlabel Fast Move di tab Moving) dan part lain yang ikut direncanakan order bulan ini; gunakan filter Kelompok untuk memisahkannya. HANKOOK dan Massive/Massiv EV dikecualikan.'],
     ['Langkah 2: Jumlah shift', 'Pilih 1 shift (pemakaian apa adanya) atau 2 shift (pemakaian naik 100%, jadi dua kali lipat). Untuk angka lain pilih Atur sendiri: isi berapa persen pemakaian naik dari 1 shift (0% = 1 shift, 50% = 1,5 kali, 100% = 2 shift). Forecast per bulan = baseline × (1 + kenaikan%). Angka kenaikan ini asumsi, cocokkan lagi dengan data nyata setelah 2 shift berjalan beberapa minggu.'],
     ['Langkah 3: Pemakaian per hari', 'Pemakaian per hari = forecast per bulan ÷ 26 hari kerja.'],
     ['Langkah 4: Lead time', 'Lead time = jarak hari dari PO dibuat sampai barang diterima di Cinere, rata-rata dari riwayat PO VinFast per part (tab Incoming Part). Part tanpa riwayat PO memakai lead time bawaan.'],
@@ -70,7 +74,7 @@
     Ekspor.unduh(Ekspor.namaDenganTanggal('snd-forecast-cinere'), [
       {
         nama: 'Forecast',
-        kolom: ['Kode Part', 'Nama Part', 'Juni*', 'Juli*', 'Agustus', 'September', 'Oktober', 'November* (parsial)', 'Baseline 1 shift/bln', 'Pengali', 'Forecast/bln', 'Pemakaian/hari', 'Lead time (hari)', 'Sumber lead time', 'Cadangan (hari)', 'Target stok', 'Stok Cinere (KS)', 'Cukup (hari kerja)', 'Saran order', 'Harga Wholesale/pcs', 'Harga Normal/pcs', 'Total Saran Order (Rp)', 'Order Pertama (pcs)', 'Total Order Pertama (Rp)', 'Order Kedua (pcs)', 'Total Order Kedua (Rp)', 'Kelompok'],
+        kolom: ['Kode Part', 'Nama Part', ...[0, 1, 2, 3, 4, 5].map(i => lblBulan(i) + (i < 2 ? '*' : i === 5 ? '* (parsial)' : '')), 'Baseline 1 shift/bln', 'Pengali', 'Forecast/bln', 'Pemakaian/hari', 'Lead time (hari)', 'Sumber lead time', 'Cadangan (hari)', 'Target stok', 'Stok Cinere (KS)', 'Cukup (hari kerja)', 'Saran order', 'Harga Wholesale/pcs', 'Harga Normal/pcs', 'Total Saran Order (Rp)', 'Order Pertama (pcs)', 'Total Order Pertama (Rp)', 'Order Kedua (pcs)', 'Total Order Kedua (Rp)', 'Kelompok'],
         baris: h.map(x => [x.kode, x.nama, ...bulan(x), Math.round(x.base * 10) / 10, mult(), Math.round(x.fc * 10) / 10, Math.round(x.fc / HARI_KERJA * 100) / 100,
           x.lt, x.ltAsli ? x.po + ' PO' : 'bawaan', Math.round(x.lt * p.cadangan / 100 * 10) / 10, x.target, x.stok, x.cover == null ? '' : Math.round(x.cover * 10) / 10, x.order,
           x.harga || '', x.hargaNormal || '', x.harga ? Math.round(x.nilai) : '', Math.ceil(x.order / 2), x.harga ? Math.ceil(x.order / 2) * x.harga : '', Math.floor(x.order / 2), x.harga ? Math.floor(x.order / 2) * x.harga : '',
@@ -79,7 +83,7 @@
       {
         nama: 'Parameter',
         kolom: ['Parameter', 'Nilai'],
-        baris: [['Skenario', namaSkenario()], ['Pengali', mult()], ['Stok pengaman (% dari lead time)', p.cadangan], ['Lead time bawaan (hari)', p.ltDefault], ['Hari kerja per bulan', HARI_KERJA], ['Data diperbarui', DATA.update || '-'], ['Metode baseline', p.metode === 'median' ? 'Median Agustus–Oktober' : 'Rata-rata Agustus–Oktober'], ['*Bulan tidak masuk baseline', 'Juni (data mulai 18 Juni), Juli (lonjakan sekali jalan), November (belum penuh)']],
+        baris: [['Skenario', namaSkenario()], ['Pengali', mult()], ['Stok pengaman (% dari lead time)', p.cadangan], ['Lead time bawaan (hari)', p.ltDefault], ['Hari kerja per bulan', HARI_KERJA], ['Data diperbarui', DATA.update || '-'], ['Metode baseline', (p.metode === 'median' ? 'Median ' : 'Rata-rata ') + periodeBaseline()], ['*Bulan tidak masuk baseline', lblBulan(0) + ', ' + lblBulan(1) + ' (lebih lama dari periode baseline), ' + lblBulan(5) + ' (bulan berjalan, belum penuh)']],
         lebar: [32, 44],
       },
       { nama: 'Panduan', kolom: ['Topik', 'Penjelasan'], baris: PANDUAN, lebar: [28, 110] },
@@ -102,7 +106,8 @@
 
   function render(el, u) {
     ui = u;
-    u.setAksi(`<button type="button" class="tombol-ikon" id="btnPanduan" title="Panduan forecasting" aria-label="Panduan forecasting">${ikon.kartu}</button>
+    u.setAksi(`<button type="button" class="tombol-ikon" id="btnSinkron" title="Sinkron data dari MRP Cinere" aria-label="Sinkron data dari MRP Cinere">${ikon.sync}</button>
+      <button type="button" class="tombol-ikon" id="btnPanduan" title="Panduan forecasting" aria-label="Panduan forecasting">${ikon.kartu}</button>
       <button type="button" class="tombol-ikon" id="btnEkspor" title="Ekspor ke Excel" aria-label="Ekspor ke Excel">${ikon.unduh}</button>`);
     el.innerHTML = `
       <section class="bagian" aria-label="Pengaturan skenario">
@@ -116,12 +121,13 @@
               <label class="fc-grup"><span class="fc-label">Cara hitung baseline</span><select class="input" id="fcMetode"><option value="rata"${p.metode === 'rata' ? ' selected' : ''}>Rata-rata 3 bulan</option><option value="median"${p.metode === 'median' ? ' selected' : ''}>Median 3 bulan (tahan lonjakan)</option></select></label>
             </div>
           </details>
-          <div class="teks-kecil" style="margin-top:10px">Pemakaian 1 shift = rata-rata Agustus–Oktober. Stok pengaman = tambahan stok sebesar persen dari lead time part itu. Cara hitung lengkap ada di tombol Panduan.</div>
+          <div class="teks-kecil" style="margin-top:10px">Pemakaian 1 shift = rata-rata <span id="fcPeriode">tiga bulan penuh terakhir</span>. Stok pengaman = tambahan stok sebesar persen dari lead time part itu. Cara hitung lengkap ada di tombol Panduan.</div>
         </div>
       </section>
       <section class="bagian" id="fcRingkas" aria-label="Ringkasan"></section>
       <section class="bagian" aria-label="Filter kelompok"><div class="chips" id="fcKelompok"></div></section>
       <section class="bagian" aria-label="Daftar part"><div class="daftar" id="fcDaftar"><div class="kosong">${ikon.kosong}<div>Memuat data…</div></div></div></section>`;
+    $('btnSinkron').addEventListener('click', sinkron);
     $('btnPanduan').addEventListener('click', panduan);
     $('btnEkspor').addEventListener('click', ekspor);
     const simpan = () => { try { localStorage.setItem(KUNCI, JSON.stringify(p)); } catch (e) {} };
@@ -148,26 +154,42 @@
 
   const subTeks = () => `Cinere · pemakaian ${DATA.update || '-'}${infoKS ? ' · stok KS ' + infoKS : ''}${DATA.offlineSejak ? ' · offline' : ''}`;
 
+  function terap(d, ks) {
+    DATA = d;
+    KS = null; infoKS = '';
+    if (ks && ks.rows) {
+      KS = new Map();
+      ks.rows.forEach(x => { if (String(x[0]).toUpperCase() === 'CINERE') { const k = String(x[1]).trim().toUpperCase(); KS.set(k, (KS.get(k) || 0) + (Number(x[7]) || 0)); } });
+      infoKS = ks.update || '';
+    }
+    if (App.state.aktif !== 'forecast') return;
+    ui.setSub(subTeks());
+    const per = $('fcPeriode'); if (per && d.bulan && d.bulan.length) per.textContent = periodeBaseline();
+    gambar();
+  }
+
   function muat() {
     Promise.all([
       App.ambil('getDataForecast', 60000),
       App.ambil('getDataKS', 120000).catch(() => null), // stok terkini dari menu KS; kalau gagal pakai angka snapshot
-    ]).then(([d, ks]) => {
-      DATA = d;
-      KS = null; infoKS = '';
-      if (ks && ks.rows) {
-        KS = new Map();
-        ks.rows.forEach(x => { if (String(x[0]).toUpperCase() === 'CINERE') KS.set(String(x[1]).trim().toUpperCase(), (KS.get(String(x[1]).trim().toUpperCase()) || 0) + (Number(x[7]) || 0)); });
-        infoKS = ks.update || '';
-      }
-      if (App.state.aktif !== 'forecast') return;
-      ui.setSub(subTeks());
-      gambar();
-    }).catch(e => {
+    ]).then(([d, ks]) => terap(d, ks)).catch(e => {
       if (App.state.aktif !== 'forecast') return;
       $('fcDaftar').innerHTML = `<div class="kosong">${ikon.kosong}<div>${esc(e.message || 'Data forecast belum bisa dimuat.')}</div><button type="button" class="tombol halus" id="coba">Coba lagi</button></div>`;
       $('coba').addEventListener('click', muat);
     });
+  }
+
+  let sedangSinkron = false;
+  /** Baca ulang MRP Cinere lewat backend (bisa 20-60 detik), lalu muat ulang tampilan. */
+  function sinkron() {
+    if (sedangSinkron) return;
+    sedangSinkron = true;
+    const b = $('btnSinkron'); if (b) b.disabled = true;
+    App.toast('Sinkron dari MRP Cinere… (bisa sampai satu menit)');
+    App.api('sinkronForecast').then(d => {
+      App.isi('getDataForecast', d);
+      return App.ambil('getDataKS', 120000).catch(() => null).then(ks => { terap(d, ks); App.toast('Sinkron selesai: ' + (d.info || (d.rows.length + ' part'))); });
+    }).catch(e => App.toast(e.message || 'Sinkron gagal.', true)).finally(() => { sedangSinkron = false; const b2 = $('btnSinkron'); if (b2) b2.disabled = false; });
   }
 
   function gambar() {
@@ -178,7 +200,7 @@
     if (bar) bar.innerHTML = [['semua', 'Semua', semua.length], ['fast', 'Fast Move', nFast], ['lain', 'Part lain', semua.length - nFast]]
       .map(([k, n, j]) => '<button type="button" class="chip' + (kelompok === k ? ' aktif' : '') + '" data-kel="' + k + '">' + n + '<b>' + j + '</b></button>').join('');
     const h = semua.filter(x => kelompok === 'semua' || (kelompok === 'fast') === x.fast).sort((a, b) => b.order - a.order || b.fc - a.fc);
-    if (!h.length) { $('fcRingkas').innerHTML = ''; $('fcDaftar').innerHTML = `<div class="kosong">${ikon.kosong}<div>Belum ada data fast moving. Jalankan sinkron forecast di Stock Bot.</div></div>`; return; }
+    if (!h.length) { $('fcRingkas').innerHTML = ''; $('fcDaftar').innerHTML = `<div class="kosong">${ikon.kosong}<div>${DATA.perluSinkron || !DATA.rows.length ? 'Data forecast belum ada. Tekan Sinkron untuk mengambil dari MRP Cinere.' : 'Tidak ada part di kelompok ini.'}</div><button type="button" class="tombol" id="sinkronKosong">Sinkron sekarang</button></div>`; const sk = $('sinkronKosong'); if (sk) sk.addEventListener('click', sinkron); return; }
     const tot = h.reduce((s, x) => ({ base: s.base + x.base, fc: s.fc + x.fc, order: s.order + x.order, perlu: s.perlu + (x.order > 0 ? 1 : 0), nilai: s.nilai + (x.nilai || 0), tanpaHarga: s.tanpaHarga + (x.order > 0 && !x.harga ? 1 : 0) }), { base: 0, fc: 0, order: 0, perlu: 0, nilai: 0, tanpaHarga: 0 });
     $('fcRingkas').innerHTML = `<div class="fc-tiles">
       <div class="fc-tile"><small>Jumlah part</small><b>${angka(h.length)}</b></div>
@@ -202,13 +224,13 @@
   function detail(kode) {
     const x = DATA.rows.map(hitung).find(y => y.kode === kode);
     if (!x) return;
-    const nama = ['Juni*', 'Juli*', 'Agustus', 'September', 'Oktober', 'November*'];
+    const nama = [0, 1, 2, 3, 4, 5].map(i => lblBulan(i) + (i < 2 || i === 5 ? '*' : ''));
     sheet.buka(esc(x.kode), `
       <div class="detail-baris"><span>Nama part</span><span>${esc(x.nama)}</span></div>
       <div class="pemisah"></div>
       <h3 class="judul-kecil">Pemakaian Cinere (1 shift)</h3>
       ${x.bulan.map((v, i) => `<div class="detail-baris"><span>${nama[i]}</span><span>${angka(v)} pcs</span></div>`).join('')}
-      <div class="teks-kecil">Baseline = Agustus–Oktober (${p.metode === 'median' ? 'median' : 'rata-rata'}). *Tidak masuk baseline: Juni (data mulai 18 Juni), Juli (sering ada lonjakan sekali jalan), November (bulan berjalan, belum penuh). Kelompok: ${x.fast ? 'Fast Move' : 'Part lain'}.</div>
+      <div class="teks-kecil">Baseline = ${periodeBaseline()} (${p.metode === 'median' ? 'median' : 'rata-rata'}). *Tidak masuk baseline: bulan yang lebih lama dan bulan berjalan (belum penuh). Kelompok: ${x.fast ? 'Fast Move' : 'Part lain'}.</div>
       <div class="pemisah"></div>
       <h3 class="judul-kecil">Skenario ×${desimal(mult())}</h3>
       <div class="detail-baris"><span>Baseline 1 shift / bulan</span><span>${desimal(x.base)} pcs</span></div>
