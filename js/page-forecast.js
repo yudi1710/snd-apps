@@ -117,7 +117,7 @@
               <label class="fc-grup"><span class="fc-label">Cara hitung baseline</span><select class="input" id="fcMetode"><option value="rata"${p.metode === 'rata' ? ' selected' : ''}>Rata-rata 3 bulan</option><option value="median"${p.metode === 'median' ? ' selected' : ''}>Median 3 bulan (tahan lonjakan)</option></select></label>
             </div>
           </details>
-          <div class="teks-kecil" style="margin-top:10px">Pemakaian 1 shift = rata-rata <span id="fcPeriode">tiga bulan penuh terakhir</span>. Stok pengaman = tambahan stok sebesar persen dari lead time part itu. Cara hitung lengkap ada di tombol Panduan.</div>
+          <div class="teks-kecil" style="margin-top:10px"><b>1 shift</b> = pemakaian sekarang (rata-rata <span id="fcPeriode">tiga bulan penuh terakhir</span>). <b>Skenario</b> = perkiraan pemakaian per bulan kalau jumlah shift diubah sesuai pilihan di atas. <b>Order 1 dan Order 2</b> = saran order dibagi dua tahap pemesanan. Stok pengaman = tambahan stok sebesar persen dari lead time part itu. Cara hitung lengkap ada di tombol Panduan.</div>
         </div>
       </section>
       <section class="bagian" id="fcRingkas" aria-label="Ringkasan"></section>
