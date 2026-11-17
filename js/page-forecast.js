@@ -11,6 +11,8 @@
   const BULAN_DIPAKAI = [3, 4, 5, 6]; // indeks Juli..Oktober di baris
   const HARI_KERJA = 26;
   let DATA = null;
+  let KS = null; // Map kode -> balance KS Cinere (stok terkini dari menu KS)
+  let infoKS = '';
   let ui = null;
   let p = Object.assign({ pengali: 2, cadangan: 30, ltDefault: 7 }, (() => { try { return JSON.parse(localStorage.getItem(KUNCI)) || {}; } catch (e) { return {}; } })());
 
@@ -22,9 +24,11 @@
     const lt = r[8] == null ? p.ltDefault : r[8];
     const perHari = fc / HARI_KERJA;
     const target = Math.ceil(fc + perHari * lt * (1 + p.cadangan / 100)); // kebutuhan 1 bulan + penyangga selama lead time & cadangan
-    const order = Math.max(0, target - r[7]);
-    const cover = perHari > 0 ? r[7] / perHari : null; // stok cukup berapa hari kerja
-    return { kode: r[0], nama: r[1], base, fc, lt, ltAsli: r[8] != null, stok: r[7], target, order, cover, bulan: r.slice(2, 7), po: r[9] };
+    const order = Math.max(0, target - stok);
+    const cover = perHari > 0 ? stok / perHari : null; // stok cukup berapa hari kerja
+    const dariKS = KS && KS.has(r[0].toUpperCase());
+    const stok = dariKS ? KS.get(r[0].toUpperCase()) : r[7];
+    return { kode: r[0], nama: r[1], base, fc, lt, ltAsli: r[8] != null, stok, dariKS, target, order, cover, bulan: r.slice(2, 7), po: r[9] };
   }
 
   // ---------- buku panduan (dipakai di aplikasi dan di sheet Panduan pada Excel) ----------
@@ -38,7 +42,7 @@
     ['Langkah 6: Target stok', 'Target stok = forecast 1 bulan + pemakaian per hari × lead time × (1 + cadangan%). Artinya stok harus cukup untuk bertahan sampai barang datang (plus pengaman) dan melayani 1 bulan setelahnya.'],
     ['Langkah 7: Saran order', 'Saran order = target stok − stok Cinere sekarang (minimal 0). Daftar diurutkan dari yang paling perlu order.'],
     ['Contoh', 'Baseline 40 pcs/bulan, pengali 1,5, lead time 20 hari, cadangan 30%, stok 20 pcs. Forecast = 60 pcs/bulan (2,3 pcs/hari). Pemakaian selama 26 hari (20 × 1,3) = ±60 pcs. Target = 60 + 60 = 120 pcs. Saran order = 120 − 20 = 100 pcs.'],
-    ['Batasan', 'Pemakaian beberapa part bergelombang (misalnya 155 pcs di satu bulan lalu 0 di bulan berikutnya), sehingga rata-rata bisa menyesatkan; cek rincian bulanannya. Stok Cinere mengikuti kolom Stock di tab Moving. Ini alat bantu perkiraan, keputusan order tetap perlu dicek manual. Data diperbarui oleh Stock Bot, lihat waktu pembaruan di bawah judul halaman.'],
+    ['Batasan', 'Pemakaian beberapa part bergelombang (misalnya 155 pcs di satu bulan lalu 0 di bulan berikutnya), sehingga rata-rata bisa menyesatkan; cek rincian bulanannya. Stok Cinere diambil dari balance menu KS (kartu stok Cinere), jadi mengikuti data KS terkini; part yang tidak ada di KS memakai angka snapshot dari tab Moving. Ini alat bantu perkiraan, keputusan order tetap perlu dicek manual. Data diperbarui oleh Stock Bot, lihat waktu pembaruan di bawah judul halaman.'],
   ];
 
   function panduan() {
@@ -53,7 +57,7 @@
     Ekspor.unduh(Ekspor.namaDenganTanggal('snd-forecast-cinere'), [
       {
         nama: 'Forecast',
-        kolom: ['Kode Part', 'Nama Part', 'Juni*', 'Juli', 'Agustus', 'September', 'Oktober', 'Baseline 1 shift/bln', 'Pengali', 'Forecast/bln', 'Pemakaian/hari', 'Lead time (hari)', 'Sumber lead time', 'Cadangan (hari)', 'Target stok', 'Stok Cinere', 'Cukup (hari kerja)', 'Saran order'],
+        kolom: ['Kode Part', 'Nama Part', 'Juni*', 'Juli', 'Agustus', 'September', 'Oktober', 'Baseline 1 shift/bln', 'Pengali', 'Forecast/bln', 'Pemakaian/hari', 'Lead time (hari)', 'Sumber lead time', 'Cadangan (hari)', 'Target stok', 'Stok Cinere (KS)', 'Cukup (hari kerja)', 'Saran order'],
         baris: h.map(x => [x.kode, x.nama, ...bulan(x), Math.round(x.base * 10) / 10, p.pengali, Math.round(x.fc * 10) / 10, Math.round(x.fc / HARI_KERJA * 100) / 100,
           x.lt, x.ltAsli ? x.po + ' PO' : 'bawaan', Math.round(x.lt * p.cadangan / 100 * 10) / 10, x.target, x.stok, x.cover == null ? '' : Math.round(x.cover * 10) / 10, x.order]),
       },
@@ -101,11 +105,20 @@
     if (DATA) { ui.setSub(subTeks()); gambar(); } else muat();
   }
 
-  const subTeks = () => `Cinere · diperbarui ${DATA.update || '-'}${DATA.offlineSejak ? ' · offline' : ''}`;
+  const subTeks = () => `Cinere · pemakaian ${DATA.update || '-'}${infoKS ? ' · stok KS ' + infoKS : ''}${DATA.offlineSejak ? ' · offline' : ''}`;
 
   function muat() {
-    App.ambil('getDataForecast', 60000).then(d => {
+    Promise.all([
+      App.ambil('getDataForecast', 60000),
+      App.ambil('getDataKS', 120000).catch(() => null), // stok terkini dari menu KS; kalau gagal pakai angka snapshot
+    ]).then(([d, ks]) => {
       DATA = d;
+      KS = null; infoKS = '';
+      if (ks && ks.rows) {
+        KS = new Map();
+        ks.rows.forEach(x => { if (String(x[0]).toUpperCase() === 'CINERE') KS.set(String(x[1]).trim().toUpperCase(), (KS.get(String(x[1]).trim().toUpperCase()) || 0) + (Number(x[7]) || 0)); });
+        infoKS = ks.update || '';
+      }
       if (App.state.aktif !== 'forecast') return;
       ui.setSub(subTeks());
       gambar();
@@ -155,7 +168,7 @@
       <div class="detail-baris"><span>Lead time</span><span>${desimal(x.lt)} hari${x.ltAsli ? ` (${x.po} PO)` : ' (bawaan)'}</span></div>
       <div class="detail-baris"><span>Cadangan (${p.cadangan}%)</span><span>${desimal(x.lt * p.cadangan / 100)} hari</span></div>
       <div class="detail-baris"><span>Target stok</span><span>${angka(x.target)} pcs</span></div>
-      <div class="detail-baris"><span>Stok Cinere</span><span>${angka(x.stok)} pcs${x.cover != null ? ` · cukup ±${desimal(x.cover)} hari kerja` : ''}</span></div>
+      <div class="detail-baris"><span>Stok Cinere (${x.dariKS ? 'KS' : 'snapshot, tidak ada di KS'})</span><span>${angka(x.stok)} pcs${x.cover != null ? ` · cukup ±${desimal(x.cover)} hari kerja` : ''}</span></div>
       <div class="detail-baris"><span><b>Saran order</b></span><span><b>${angka(x.order)} pcs</b></span></div>`);
   }
 
