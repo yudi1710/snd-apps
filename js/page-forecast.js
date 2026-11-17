@@ -35,11 +35,13 @@
     const target = Math.ceil(fc + perHari * lt * (1 + p.cadangan / 100)); // kebutuhan 1 bulan + penyangga selama lead time & cadangan
     const order = Math.max(0, target - stok);
     const cover = perHari > 0 ? stok / perHari : null; // stok cukup berapa hari kerja
+    const manual = (DATA.hargaManual || {})[r[0].toUpperCase()] || null; // harga isian manual, hanya dipakai kalau belum ada harga PO
+    const h = r[12] || manual || null;
     return { kode: r[0], nama: r[1], base, fc, lt, ltAsli: r[9] != null, stok, dariKS, target, order, cover, bulan: r.slice(2, 8), po: r[10], sumber: r[11], fast: /fast/i.test(r[11] || ''),
-      harga: r[12] || null, hargaNormal: r[13] || null,
-      nilai: r[12] ? order * r[12] : null,
+      harga: h, hargaManual: !r[12] && !!manual, hargaNormal: r[13] || null,
+      nilai: h ? order * h : null,
       o1: Math.ceil(order / 2), o2: order - Math.ceil(order / 2), // Order Pertama (dibulatkan ke atas) dan Order Kedua
-      n1: r[12] ? Math.ceil(order / 2) * r[12] : null, n2: r[12] ? (order - Math.ceil(order / 2)) * r[12] : null };
+      n1: h ? Math.ceil(order / 2) * h : null, n2: h ? (order - Math.ceil(order / 2)) * h : null };
   }
 
   // ---------- buku panduan (dipakai di aplikasi dan di sheet Panduan pada Excel) ----------
@@ -53,7 +55,7 @@
     ['Langkah 6: Export Excel', 'Tekan tombol unduh (ikon panah ke bawah) untuk mengunduh file .xlsx berisi tiga sheet: Forecast (semua part lengkap dengan pemakaian bulanan, baseline, forecast, lead time, pengaman, target stok, stok, saran order, harga, total, order pertama dan kedua), Parameter (shift, pengaman, dan pengaturan yang dipakai saat unduh), dan Panduan (isi buku ini). Isi Excel mengikuti pengaturan di layar saat tombol ditekan, jadi atur dulu skenarionya baru unduh. Angka di Excel berupa hasil hitung, bukan rumus.'],
     ['Cara hitung: baseline', 'Baseline 1 shift = pemakaian tiga bulan penuh terakhir dari tab Outgoing Part (bulan berjalan tidak dihitung karena belum penuh), dirata-rata atau diambil mediannya. Pemakaian negatif karena retur dihitung 0. Forecast per bulan = baseline × (1 + kenaikan%).'],
     ['Cara hitung: target dan saran order', 'Pemakaian per hari = forecast per bulan ÷ 26 hari kerja. Lead time = rata-rata jarak hari dari PO dibuat sampai barang diterima (riwayat PO VinFast per part; kalau belum ada pakai lead time bawaan). Target stok = forecast 1 bulan + pemakaian per hari × lead time × (1 + pengaman%). Saran order = target stok − stok Cinere sekarang (minimal 0). Artinya stok harus cukup untuk bertahan sampai barang datang (plus pengaman) dan melayani 1 bulan setelahnya.'],
-    ['Cara hitung: harga dan total', 'Harga per pcs = harga wholesale, yaitu harga beli (sebelum pajak) pada PO terakhir part itu di tab Incoming Part. Total = saran order × harga. Pembagian dua tahap: Order 1 (Order Pertama) = separuh saran order dibulatkan ke atas, Order 2 (Order Kedua) = sisanya, jadi dua tahap pemesanan dengan total sama dengan saran order. Pembagian ini default 50:50; kalau mau memecah dengan komposisi lain, sesuaikan manual di Excel. Part yang belum pernah di-PO belum punya harga dan ditandai strip. Estimasi nilai order di ringkasan adalah jumlah total semua part yang punya harga.'],
+    ['Cara hitung: harga dan total', 'Harga per pcs = harga wholesale, yaitu harga beli (sebelum pajak) pada PO terakhir part itu di tab Incoming Part. Total = saran order × harga. Pembagian dua tahap: Order 1 (Order Pertama) = separuh saran order dibulatkan ke atas, Order 2 (Order Kedua) = sisanya, jadi dua tahap pemesanan dengan total sama dengan saran order. Pembagian ini default 50:50; kalau mau memecah dengan komposisi lain, sesuaikan manual di Excel. Part yang belum pernah di-PO belum punya harga dan ditandai "isi harga": klik barisnya, isi Harga manual / pcs di rincian, lalu Simpan harga. Harga manual tersimpan di server (semua pengguna melihat yang sama), tidak hilang saat Sinkron, ditandai ✎, dan otomatis diganti harga PO begitu part itu sudah pernah di-PO. Estimasi nilai order di ringkasan adalah jumlah total semua part yang punya harga.'],
     ['Contoh', 'Baseline 40 pcs/bulan, kenaikan 50% (×1,5), lead time 20 hari, pengaman 30%, stok 20 pcs, harga Rp 100.000. Forecast = 60 pcs/bulan (±2,3 pcs/hari). Pemakaian selama 26 hari (20 × 1,3) = ±60 pcs. Target = 60 + 60 = 120 pcs. Saran order = 120 − 20 = 100 pcs. Total = 100 × Rp 100.000 = Rp 10.000.000.'],
     ['Catatan dan batasan', 'Daftar part adalah part berlabel Fast Move di tab Moving MRP Cinere; HANKOOK dan Massive/Massiv EV dikecualikan. Pemakaian beberapa part bergelombang (misalnya 240 pcs di satu bulan lalu 3 dan 0), sehingga rata-rata bisa menyesatkan; coba baseline median dan cek rincian bulanannya. Stok mengikuti KS terkini (kalau part tidak ada di KS dipakai angka snapshot dari sinkron). Ini alat bantu perkiraan, keputusan order tetap perlu dicek manual.'],
   ];
@@ -70,10 +72,10 @@
     Ekspor.unduh(Ekspor.namaDenganTanggal('snd-forecast-cinere'), [
       {
         nama: 'Forecast',
-        kolom: ['Kode Part', 'Nama Part', ...[0, 1, 2, 3, 4, 5].map(i => lblBulan(i) + (i < 2 ? '*' : i === 5 ? '* (parsial)' : '')), 'Baseline 1 shift/bln', 'Pengali', 'Forecast/bln', 'Pemakaian/hari', 'Lead time (hari)', 'Sumber lead time', 'Cadangan (hari)', 'Target stok', 'Stok Cinere (KS)', 'Cukup (hari kerja)', 'Saran order', 'Harga Wholesale/pcs', 'Harga Normal/pcs', 'Total Saran Order (Rp)', 'Order Pertama (pcs)', 'Total Order Pertama (Rp)', 'Order Kedua (pcs)', 'Total Order Kedua (Rp)'],
+        kolom: ['Kode Part', 'Nama Part', ...[0, 1, 2, 3, 4, 5].map(i => lblBulan(i) + (i < 2 ? '*' : i === 5 ? '* (parsial)' : '')), 'Baseline 1 shift/bln', 'Pengali', 'Forecast/bln', 'Pemakaian/hari', 'Lead time (hari)', 'Sumber lead time', 'Cadangan (hari)', 'Target stok', 'Stok Cinere (KS)', 'Cukup (hari kerja)', 'Saran order', 'Harga Wholesale/pcs', 'Harga Normal/pcs', 'Total Saran Order (Rp)', 'Order Pertama (pcs)', 'Total Order Pertama (Rp)', 'Order Kedua (pcs)', 'Total Order Kedua (Rp)', 'Sumber harga'],
         baris: h.map(x => [x.kode, x.nama, ...bulan(x), Math.round(x.base * 10) / 10, mult(), Math.round(x.fc * 10) / 10, Math.round(x.fc / HARI_KERJA * 100) / 100,
           x.lt, x.ltAsli ? x.po + ' PO' : 'bawaan', Math.round(x.lt * p.cadangan / 100 * 10) / 10, x.target, x.stok, x.cover == null ? '' : Math.round(x.cover * 10) / 10, x.order,
-          x.harga || '', x.hargaNormal || '', x.harga ? Math.round(x.nilai) : '', x.o1, x.harga ? x.n1 : '', x.o2, x.harga ? x.n2 : '',
+          x.harga || '', x.hargaNormal || '', x.harga ? Math.round(x.nilai) : '', x.o1, x.harga ? x.n1 : '', x.o2, x.harga ? x.n2 : '', x.hargaManual ? 'Manual' : x.harga ? 'PO terakhir' : 'Belum ada',
           ]),
       },
       {
@@ -206,7 +208,7 @@
         <span class="fc-sel fc-order ${x.order > 0 ? 'perlu' : 'cukup'}" data-l="Saran order">${x.order > 0 ? angka(x.order) : 'Cukup'}</span>
         <span class="fc-sel fc-o" data-l="Order 1">${x.o1 > 0 ? angka(x.o1) : '–'}${x.o1 > 0 && x.harga ? `<small class="fc-sub">${angka(Math.round(x.n1))}</small>` : ''}</span>
         <span class="fc-sel fc-o" data-l="Order 2">${x.o2 > 0 ? angka(x.o2) : '–'}${x.o2 > 0 && x.harga ? `<small class="fc-sub">${angka(Math.round(x.n2))}</small>` : ''}</span>
-        <span class="fc-sel fc-total" data-l="Total (Rp)">${x.order > 0 && x.harga ? angka(Math.round(x.nilai)) : '–'}${x.harga ? `<small class="fc-sub">@ ${angka(x.harga)}</small>` : ''}</span>
+        <span class="fc-sel fc-total" data-l="Total (Rp)">${x.order > 0 && x.harga ? angka(Math.round(x.nilai)) : '–'}${x.harga ? `<small class="fc-sub">@ ${angka(x.harga)}${x.hargaManual ? ' ✎' : ''}</small>` : '<small class="fc-sub">isi harga ›</small>'}</span>
 
       </button>`).join('');
   }
@@ -232,13 +234,31 @@
       <div class="detail-baris"><span><b>Saran order</b></span><span><b>${angka(x.order)} pcs</b></span></div>
       <div class="pemisah"></div>
       <h3 class="judul-kecil">Harga</h3>
-      ${x.harga ? `<div class="detail-baris"><span>Harga wholesale / pcs</span><span>${rp(x.harga)}</span></div>
+      ${x.harga ? `<div class="detail-baris"><span>${x.hargaManual ? 'Harga manual / pcs' : 'Harga wholesale / pcs'}</span><span>${rp(x.harga)}</span></div>
       ${x.hargaNormal ? `<div class="detail-baris"><span>Harga normal / pcs</span><span>${rp(x.hargaNormal)}</span></div>` : ''}
       <div class="detail-baris"><span><b>Total saran order</b></span><span><b>${rp(x.nilai)}</b></span></div>
       ${x.order > 0 ? `<div class="detail-baris"><span>Order pertama (${angka(x.o1)} pcs)</span><span>${rp(x.n1)}</span></div>
       <div class="detail-baris"><span>Order kedua (${angka(x.o2)} pcs)</span><span>${rp(x.n2)}</span></div>` : ''}
 
-      <div class="teks-kecil">Harga wholesale = harga beli PO terakhir dari VinFast.</div>` : `<div class="teks-kecil">Belum ada harga untuk part ini (belum pernah di-PO).</div>`}`);
+      <div class="teks-kecil">${x.hargaManual ? 'Harga ini diisi manual. Akan diganti otomatis kalau part ini sudah punya harga dari PO.' : 'Harga wholesale = harga beli PO terakhir dari VinFast.'}</div>` : `<div class="teks-kecil">Belum ada harga untuk part ini (belum pernah di-PO). Isi manual di bawah supaya total order ikut terhitung.</div>`}
+      ${!x.hargaManual && x.harga ? '' : `<div class="fc-grup" style="margin-top:10px"><label class="fc-label" for="fcHargaIn">Harga manual / pcs (Rp)</label>
+        <input class="input" id="fcHargaIn" type="number" min="0" step="1" inputmode="numeric" placeholder="mis. 150000" value="${x.hargaManual ? x.harga : ''}">
+        <div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="tombol" id="fcHargaSimpan">Simpan harga</button>${x.hargaManual ? '<button type="button" class="tombol halus" id="fcHargaHapus">Hapus</button>' : ''}</div></div>`}`);
+    const sim = $('fcHargaSimpan'), hap = $('fcHargaHapus');
+    if (sim) sim.addEventListener('click', () => simpanHarga(x.kode, $('fcHargaIn').value));
+    if (hap) hap.addEventListener('click', () => simpanHarga(x.kode, ''));
+  }
+
+  /** Simpan harga manual satu part ke server (dipakai semua pengguna), lalu hitung ulang tampilan. */
+  function simpanHarga(kode, nilai) {
+    const v = String(nilai).trim() === '' ? 0 : Number(nilai);
+    if (!Number.isFinite(v) || v < 0) { App.toast('Harga tidak valid.', true); return; }
+    App.api('simpanHargaForecast', kode, v).then(d => {
+      DATA.hargaManual = d.hargaManual || {};
+      if (sheet.tutup) sheet.tutup();
+      gambar();
+      App.toast(v > 0 ? 'Harga ' + kode + ' disimpan: ' + rp(v) : 'Harga manual ' + kode + ' dihapus.');
+    }).catch(e => App.toast(e.message || 'Gagal menyimpan harga.', true));
   }
 
   App.daftar({
