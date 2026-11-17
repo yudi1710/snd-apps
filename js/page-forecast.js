@@ -7,12 +7,12 @@
  */
 (function () {
   const { sheet, esc, angka, ikon, $ } = App;
-  const KUNCI = 'snd_fc_param';
+  const KUNCI = 'snd_fc_param2';
   const BULAN_DIPAKAI = [3, 4, 5, 6]; // indeks Juli..Oktober di baris
   const HARI_KERJA = 26;
   let DATA = null;
   let ui = null;
-  let p = Object.assign({ pengali: 2, cadangan: 7, ltDefault: 7 }, (() => { try { return JSON.parse(localStorage.getItem(KUNCI)) || {}; } catch (e) { return {}; } })());
+  let p = Object.assign({ pengali: 2, cadangan: 30, ltDefault: 7 }, (() => { try { return JSON.parse(localStorage.getItem(KUNCI)) || {}; } catch (e) { return {}; } })());
 
   const desimal = n => (Math.round(n * 10) / 10).toLocaleString('id-ID');
 
@@ -21,7 +21,7 @@
     const fc = base * p.pengali; // skenario per bulan
     const lt = r[8] == null ? p.ltDefault : r[8];
     const perHari = fc / HARI_KERJA;
-    const target = Math.ceil(fc + perHari * (lt + p.cadangan)); // kebutuhan 1 bulan + penyangga selama lead time & cadangan
+    const target = Math.ceil(fc + perHari * lt * (1 + p.cadangan / 100)); // kebutuhan 1 bulan + penyangga selama lead time & cadangan
     const order = Math.max(0, target - r[7]);
     const cover = perHari > 0 ? r[7] / perHari : null; // stok cukup berapa hari kerja
     return { kode: r[0], nama: r[1], base, fc, lt, ltAsli: r[8] != null, stok: r[7], target, order, cover, bulan: r.slice(2, 7), po: r[9] };
@@ -36,10 +36,10 @@
           <div class="kartu-judul"><h2>Skenario</h2><small>Fast moving Cinere</small></div>
           <div class="fc-param">
             <label>Pengali shift<input class="input" id="fcPengali" type="number" min="0.5" max="4" step="0.1" inputmode="decimal" value="${p.pengali}"></label>
-            <label>Cadangan (hari)<input class="input" id="fcCadangan" type="number" min="0" max="60" step="1" inputmode="numeric" value="${p.cadangan}"></label>
+            <label>Cadangan (% lead time)<input class="input" id="fcCadangan" type="number" min="0" max="200" step="5" inputmode="numeric" value="${p.cadangan}"></label>
             <label>Lead time bawaan (hari)<input class="input" id="fcLt" type="number" min="0" max="90" step="1" inputmode="numeric" value="${p.ltDefault}"></label>
           </div>
-          <div class="teks-kecil" style="margin-top:10px">Baseline 1 shift = rata-rata pemakaian Juli–Oktober. Skenario 2 shift = baseline × pengali (2 = permintaan naik dua kali lipat). Saran order = kebutuhan 1 bulan + pemakaian selama lead time dan cadangan − stok Cinere. Lead time dari riwayat PO VinFast per part; kalau belum ada riwayat dipakai lead time bawaan.</div>
+          <div class="teks-kecil" style="margin-top:10px">Baseline 1 shift = rata-rata pemakaian Juli–Oktober. Skenario = baseline × pengali (2 = permintaan naik dua kali lipat). Cadangan = pengaman sebagai persen dari lead time part itu (lead time 20 hari dengan cadangan 30% = 6 hari ekstra). Saran order = kebutuhan 1 bulan + pemakaian selama (lead time + cadangan) − stok Cinere. Lead time dari riwayat PO VinFast per part; kalau belum ada riwayat dipakai lead time bawaan.</div>
         </div>
       </section>
       <section class="bagian" id="fcRingkas" aria-label="Ringkasan"></section>
@@ -48,7 +48,7 @@
     const ambilAngka = (id, awal, min, max) => { const v = parseFloat($(id).value); return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : awal; };
     const ubah = () => {
       p.pengali = ambilAngka('fcPengali', 2, 0.5, 4);
-      p.cadangan = ambilAngka('fcCadangan', 7, 0, 60);
+      p.cadangan = ambilAngka('fcCadangan', 30, 0, 200);
       p.ltDefault = ambilAngka('fcLt', 7, 0, 90);
       simpan(); gambar();
     };
@@ -109,6 +109,7 @@
       <div class="detail-baris"><span>Baseline 1 shift / bulan</span><span>${desimal(x.base)} pcs</span></div>
       <div class="detail-baris"><span>Forecast / bulan</span><span>${desimal(x.fc)} pcs</span></div>
       <div class="detail-baris"><span>Lead time</span><span>${desimal(x.lt)} hari${x.ltAsli ? ` (${x.po} PO)` : ' (bawaan)'}</span></div>
+      <div class="detail-baris"><span>Cadangan (${p.cadangan}%)</span><span>${desimal(x.lt * p.cadangan / 100)} hari</span></div>
       <div class="detail-baris"><span>Target stok</span><span>${angka(x.target)} pcs</span></div>
       <div class="detail-baris"><span>Stok Cinere</span><span>${angka(x.stok)} pcs${x.cover != null ? ` · cukup ±${desimal(x.cover)} hari kerja` : ''}</span></div>
       <div class="detail-baris"><span><b>Saran order</b></span><span><b>${angka(x.order)} pcs</b></span></div>`);
