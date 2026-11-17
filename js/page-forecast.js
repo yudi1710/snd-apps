@@ -27,9 +27,51 @@
     return { kode: r[0], nama: r[1], base, fc, lt, ltAsli: r[8] != null, stok: r[7], target, order, cover, bulan: r.slice(2, 7), po: r[9] };
   }
 
+  // ---------- buku panduan (dipakai di aplikasi dan di sheet Panduan pada Excel) ----------
+  const PANDUAN = [
+    ['Tujuan', 'Memperkirakan kebutuhan part fast moving Cinere kalau jam kerja naik dari 1 shift ke 2 shift, lalu menghitung berapa yang perlu di-order ke VinFast supaya stok tidak habis.'],
+    ['Langkah 1: Baseline', 'Ambil pemakaian per bulan dari tab Moving MRP Cinere. Baseline 1 shift = rata-rata pemakaian Juli sampai Oktober. Juni tidak dipakai karena data MRP baru mulai 18 Juni (bulan belum penuh). Hanya part berlabel Fast Move yang masuk.'],
+    ['Langkah 2: Pengali shift', 'Forecast per bulan = baseline × pengali. Pengali 2 artinya permintaan naik dua kali lipat. Kalau 2 shift tidak menggandakan pemakaian (misalnya ×1,5), ubah pengalinya. Angka ini asumsi, cocokkan lagi dengan data nyata setelah 2 shift berjalan beberapa minggu.'],
+    ['Langkah 3: Pemakaian per hari', 'Pemakaian per hari = forecast per bulan ÷ 26 hari kerja.'],
+    ['Langkah 4: Lead time', 'Lead time = jarak hari dari PO dibuat sampai barang diterima di Cinere, rata-rata dari riwayat PO VinFast per part (tab Incoming Part). Part tanpa riwayat PO memakai lead time bawaan.'],
+    ['Langkah 5: Cadangan', 'Cadangan = pengaman sebagai persen dari lead time part itu. Contoh 30%: lead time 20 hari dapat cadangan 6 hari, lead time 2 hari dapat 0,6 hari. Naikkan kalau mau lebih aman dari keterlambatan, turunkan kalau stok mau diketatkan.'],
+    ['Langkah 6: Target stok', 'Target stok = forecast 1 bulan + pemakaian per hari × lead time × (1 + cadangan%). Artinya stok harus cukup untuk bertahan sampai barang datang (plus pengaman) dan melayani 1 bulan setelahnya.'],
+    ['Langkah 7: Saran order', 'Saran order = target stok − stok Cinere sekarang (minimal 0). Daftar diurutkan dari yang paling perlu order.'],
+    ['Contoh', 'Baseline 40 pcs/bulan, pengali 1,5, lead time 20 hari, cadangan 30%, stok 20 pcs. Forecast = 60 pcs/bulan (2,3 pcs/hari). Pemakaian selama 26 hari (20 × 1,3) = ±60 pcs. Target = 60 + 60 = 120 pcs. Saran order = 120 − 20 = 100 pcs.'],
+    ['Batasan', 'Pemakaian beberapa part bergelombang (misalnya 155 pcs di satu bulan lalu 0 di bulan berikutnya), sehingga rata-rata bisa menyesatkan; cek rincian bulanannya. Stok Cinere mengikuti kolom Stock di tab Moving. Ini alat bantu perkiraan, keputusan order tetap perlu dicek manual. Data diperbarui oleh Stock Bot, lihat waktu pembaruan di bawah judul halaman.'],
+  ];
+
+  function panduan() {
+    sheet.buka('Panduan forecasting', PANDUAN.map(([j, t]) => `<h3 class="judul-kecil">${esc(j)}</h3><div class="teks-kecil" style="margin-bottom:10px">${esc(t)}</div>`).join(''));
+  }
+
+  function ekspor() {
+    if (!DATA || !window.Ekspor) return;
+    const h = DATA.rows.map(hitung).sort((a, b) => b.order - a.order || b.fc - a.fc);
+    if (!h.length) { App.toast('Tidak ada data untuk diekspor.', true); return; }
+    const bulan = x => x.bulan;
+    Ekspor.unduh(Ekspor.namaDenganTanggal('snd-forecast-cinere'), [
+      {
+        nama: 'Forecast',
+        kolom: ['Kode Part', 'Nama Part', 'Juni*', 'Juli', 'Agustus', 'September', 'Oktober', 'Baseline 1 shift/bln', 'Pengali', 'Forecast/bln', 'Pemakaian/hari', 'Lead time (hari)', 'Sumber lead time', 'Cadangan (hari)', 'Target stok', 'Stok Cinere', 'Cukup (hari kerja)', 'Saran order'],
+        baris: h.map(x => [x.kode, x.nama, ...bulan(x), Math.round(x.base * 10) / 10, p.pengali, Math.round(x.fc * 10) / 10, Math.round(x.fc / HARI_KERJA * 100) / 100,
+          x.lt, x.ltAsli ? x.po + ' PO' : 'bawaan', Math.round(x.lt * p.cadangan / 100 * 10) / 10, x.target, x.stok, x.cover == null ? '' : Math.round(x.cover * 10) / 10, x.order]),
+      },
+      {
+        nama: 'Parameter',
+        kolom: ['Parameter', 'Nilai'],
+        baris: [['Pengali shift', p.pengali], ['Cadangan (% dari lead time)', p.cadangan], ['Lead time bawaan (hari)', p.ltDefault], ['Hari kerja per bulan', HARI_KERJA], ['Data diperbarui', DATA.update || '-'], ['*Juni', 'tidak masuk baseline (data MRP mulai 18 Juni)']],
+        lebar: [32, 44],
+      },
+      { nama: 'Panduan', kolom: ['Topik', 'Penjelasan'], baris: PANDUAN, lebar: [28, 110] },
+    ]);
+    App.toast(`Mengunduh forecast ${angka(h.length)} part ke Excel…`);
+  }
+
   function render(el, u) {
     ui = u;
-    u.setAksi('');
+    u.setAksi(`<button type="button" class="tombol-ikon" id="btnPanduan" title="Panduan forecasting" aria-label="Panduan forecasting">${ikon.kartu}</button>
+      <button type="button" class="tombol-ikon" id="btnEkspor" title="Ekspor ke Excel" aria-label="Ekspor ke Excel">${ikon.unduh}</button>`);
     el.innerHTML = `
       <section class="bagian" aria-label="Pengaturan skenario">
         <div class="kartu">
@@ -44,6 +86,8 @@
       </section>
       <section class="bagian" id="fcRingkas" aria-label="Ringkasan"></section>
       <section class="bagian" aria-label="Daftar part"><div class="daftar" id="fcDaftar"><div class="kosong">${ikon.kosong}<div>Memuat data…</div></div></div></section>`;
+    $('btnPanduan').addEventListener('click', panduan);
+    $('btnEkspor').addEventListener('click', ekspor);
     const simpan = () => { try { localStorage.setItem(KUNCI, JSON.stringify(p)); } catch (e) {} };
     const ambilAngka = (id, awal, min, max) => { const v = parseFloat($(id).value); return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : awal; };
     const ubah = () => {
