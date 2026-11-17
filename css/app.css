@@ -384,3 +384,14 @@ button.notif { font: inherit; color: inherit; }
 .ringkas-filter { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 2px 8px; min-height: 30px; }
 .tombol.kecil { min-height: 28px; padding: 0 10px; font-size: 12px; }
 .grafik-baris { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+
+/* ---------- Forecast Cinere ---------- */
+.fc-param { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.fc-param label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-2); font-weight: 500; }
+.fc-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.fc-tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fc-tile small { font-size: 11px; color: var(--text-3); letter-spacing: .03em; text-transform: uppercase; }
+.fc-tile b { font-size: 22px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.fc-tile span { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+@media (min-width: 900px) { .fc-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .fc-param { grid-template-columns: 1fr; } }
