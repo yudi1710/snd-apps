@@ -1,40 +1,42 @@
 /**
  * Halaman: Forecast Cinere (fast moving, skenario 2 shift).
  * Data dasar dari tab "Forecast Cinere" (Stock Bot, dari Moving + Incoming Part MRP Cinere).
- * Baris: [kode, nama, juni, juli, agustus, september, oktober, stok, leadTimeHari|null, jumlahPO].
- * Baseline 1 shift = rata-rata Juli-Oktober (Juni tidak dipakai: data MRP mulai 18 Juni, bulan belum penuh).
+ * Baris: [kode, nama, juni, juli, agustus, september, oktober, november(parsial), stokSnapshot, leadTimeHari|null, jumlahPO, sumber, orderFR].
+ * Pemakaian dari Outgoing Part (sumber sama dengan FR Nov). Baseline 1 shift = Agustus-Oktober (3 bulan, sama dengan FR Nov);
+ * Juni (data mulai 18 Juni), Juli (ada lonjakan sekali jalan), dan November (belum penuh) tidak masuk baseline.
  * Pengali shift, hari cadangan, dan lead time bawaan bisa diatur dan diingat di perangkat.
  */
 (function () {
   const { sheet, esc, angka, ikon, $ } = App;
-  const KUNCI = 'snd_fc_param2';
-  const BULAN_DIPAKAI = [3, 4, 5, 6]; // indeks Juli..Oktober di baris
+  const KUNCI = 'snd_fc_param3';
+  const BULAN_DIPAKAI = [4, 5, 6]; // indeks Agustus..Oktober di baris
   const HARI_KERJA = 26;
   let DATA = null;
   let KS = null; // Map kode -> balance KS Cinere (stok terkini dari menu KS)
   let infoKS = '';
   let ui = null;
-  let p = Object.assign({ pengali: 2, cadangan: 30, ltDefault: 7 }, (() => { try { return JSON.parse(localStorage.getItem(KUNCI)) || {}; } catch (e) { return {}; } })());
+  let p = Object.assign({ pengali: 2, cadangan: 30, ltDefault: 7, metode: 'rata' }, (() => { try { return JSON.parse(localStorage.getItem(KUNCI)) || {}; } catch (e) { return {}; } })());
 
   const desimal = n => (Math.round(n * 10) / 10).toLocaleString('id-ID');
 
   function hitung(r) {
     const dariKS = KS && KS.has(r[0].toUpperCase());
-    const stok = dariKS ? KS.get(r[0].toUpperCase()) : r[7];
-    const base = BULAN_DIPAKAI.reduce((s, i) => s + r[i], 0) / BULAN_DIPAKAI.length; // 1 shift per bulan
+    const stok = dariKS ? KS.get(r[0].toUpperCase()) : r[8];
+    const bln = BULAN_DIPAKAI.map(i => Math.max(0, r[i])); // retur (minus) tidak dihitung sebagai pemakaian negatif
+    const base = p.metode === 'median' ? bln.slice().sort((a, b) => a - b)[1] : bln.reduce((s, v) => s + v, 0) / bln.length; // 1 shift per bulan
     const fc = base * p.pengali; // skenario per bulan
-    const lt = r[8] == null ? p.ltDefault : r[8];
+    const lt = r[9] == null ? p.ltDefault : r[9];
     const perHari = fc / HARI_KERJA;
     const target = Math.ceil(fc + perHari * lt * (1 + p.cadangan / 100)); // kebutuhan 1 bulan + penyangga selama lead time & cadangan
     const order = Math.max(0, target - stok);
     const cover = perHari > 0 ? stok / perHari : null; // stok cukup berapa hari kerja
-    return { kode: r[0], nama: r[1], base, fc, lt, ltAsli: r[8] != null, stok, dariKS, target, order, cover, bulan: r.slice(2, 7), po: r[9] };
+    return { kode: r[0], nama: r[1], base, fc, lt, ltAsli: r[9] != null, stok, dariKS, target, order, cover, bulan: r.slice(2, 8), po: r[10], sumber: r[11], orderFR: r[12] };
   }
 
   // ---------- buku panduan (dipakai di aplikasi dan di sheet Panduan pada Excel) ----------
   const PANDUAN = [
     ['Tujuan', 'Memperkirakan kebutuhan part fast moving Cinere kalau jam kerja naik dari 1 shift ke 2 shift, lalu menghitung berapa yang perlu di-order ke VinFast supaya stok tidak habis.'],
-    ['Langkah 1: Baseline', 'Ambil pemakaian per bulan dari tab Moving MRP Cinere. Baseline 1 shift = rata-rata pemakaian Juli sampai Oktober. Juni tidak dipakai karena data MRP baru mulai 18 Juni (bulan belum penuh). Hanya part berlabel Fast Move yang masuk.'],
+    ['Langkah 1: Baseline', 'Pemakaian per bulan dihitung dari tab Outgoing Part MRP Cinere (sumber yang sama dengan FR). Baseline 1 shift = pemakaian Agustus sampai Oktober, rata-rata atau median (median tidak ikut tertarik lonjakan sekali jalan). Tidak masuk baseline: Juni (data mulai 18 Juni), Juli (sering ada lonjakan), November (bulan berjalan, belum penuh). Part yang masuk daftar: berlabel Fast Move di tab Moving, ditambah part yang punya Qty Order di sheet FR bulan ini. HANKOOK dan Massive/Massiv EV dikecualikan.'],
     ['Langkah 2: Pengali shift', 'Forecast per bulan = baseline × pengali. Pengali 2 artinya permintaan naik dua kali lipat. Kalau 2 shift tidak menggandakan pemakaian (misalnya ×1,5), ubah pengalinya. Angka ini asumsi, cocokkan lagi dengan data nyata setelah 2 shift berjalan beberapa minggu.'],
     ['Langkah 3: Pemakaian per hari', 'Pemakaian per hari = forecast per bulan ÷ 26 hari kerja.'],
     ['Langkah 4: Lead time', 'Lead time = jarak hari dari PO dibuat sampai barang diterima di Cinere, rata-rata dari riwayat PO VinFast per part (tab Incoming Part). Part tanpa riwayat PO memakai lead time bawaan.'],
@@ -42,7 +44,7 @@
     ['Langkah 6: Target stok', 'Target stok = forecast 1 bulan + pemakaian per hari × lead time × (1 + cadangan%). Artinya stok harus cukup untuk bertahan sampai barang datang (plus pengaman) dan melayani 1 bulan setelahnya.'],
     ['Langkah 7: Saran order', 'Saran order = target stok − stok Cinere sekarang (minimal 0). Daftar diurutkan dari yang paling perlu order.'],
     ['Contoh', 'Baseline 40 pcs/bulan, pengali 1,5, lead time 20 hari, cadangan 30%, stok 20 pcs. Forecast = 60 pcs/bulan (2,3 pcs/hari). Pemakaian selama 26 hari (20 × 1,3) = ±60 pcs. Target = 60 + 60 = 120 pcs. Saran order = 120 − 20 = 100 pcs.'],
-    ['Batasan', 'Pemakaian beberapa part bergelombang (misalnya 155 pcs di satu bulan lalu 0 di bulan berikutnya), sehingga rata-rata bisa menyesatkan; cek rincian bulanannya. Stok Cinere diambil dari balance menu KS (kartu stok Cinere), jadi mengikuti data KS terkini; part yang tidak ada di KS memakai angka snapshot dari tab Moving. Ini alat bantu perkiraan, keputusan order tetap perlu dicek manual. Data diperbarui oleh Stock Bot, lihat waktu pembaruan di bawah judul halaman.'],
+    ['Batasan', 'Pemakaian beberapa part bergelombang (misalnya 240 pcs di satu bulan lalu 3 dan 0), sehingga rata-rata bisa menyesatkan; coba baseline median dan cek rincian bulanannya. Kolom Qty Order FR Nov dipakai sebagai pembanding dengan order yang sudah direncanakan di sheet FR. Stok Cinere diambil dari balance menu KS (kartu stok Cinere), jadi mengikuti data KS terkini; part yang tidak ada di KS memakai angka snapshot dari tab Moving. Ini alat bantu perkiraan, keputusan order tetap perlu dicek manual. Data diperbarui oleh Stock Bot, lihat waktu pembaruan di bawah judul halaman.'],
   ];
 
   function panduan() {
@@ -57,14 +59,14 @@
     Ekspor.unduh(Ekspor.namaDenganTanggal('snd-forecast-cinere'), [
       {
         nama: 'Forecast',
-        kolom: ['Kode Part', 'Nama Part', 'Juni*', 'Juli', 'Agustus', 'September', 'Oktober', 'Baseline 1 shift/bln', 'Pengali', 'Forecast/bln', 'Pemakaian/hari', 'Lead time (hari)', 'Sumber lead time', 'Cadangan (hari)', 'Target stok', 'Stok Cinere (KS)', 'Cukup (hari kerja)', 'Saran order'],
+        kolom: ['Kode Part', 'Nama Part', 'Juni*', 'Juli*', 'Agustus', 'September', 'Oktober', 'November* (parsial)', 'Baseline 1 shift/bln', 'Pengali', 'Forecast/bln', 'Pemakaian/hari', 'Lead time (hari)', 'Sumber lead time', 'Cadangan (hari)', 'Target stok', 'Stok Cinere (KS)', 'Cukup (hari kerja)', 'Saran order', 'Qty Order FR Nov', 'Sumber part'],
         baris: h.map(x => [x.kode, x.nama, ...bulan(x), Math.round(x.base * 10) / 10, p.pengali, Math.round(x.fc * 10) / 10, Math.round(x.fc / HARI_KERJA * 100) / 100,
-          x.lt, x.ltAsli ? x.po + ' PO' : 'bawaan', Math.round(x.lt * p.cadangan / 100 * 10) / 10, x.target, x.stok, x.cover == null ? '' : Math.round(x.cover * 10) / 10, x.order]),
+          x.lt, x.ltAsli ? x.po + ' PO' : 'bawaan', Math.round(x.lt * p.cadangan / 100 * 10) / 10, x.target, x.stok, x.cover == null ? '' : Math.round(x.cover * 10) / 10, x.order, x.orderFR, x.sumber]),
       },
       {
         nama: 'Parameter',
         kolom: ['Parameter', 'Nilai'],
-        baris: [['Pengali shift', p.pengali], ['Cadangan (% dari lead time)', p.cadangan], ['Lead time bawaan (hari)', p.ltDefault], ['Hari kerja per bulan', HARI_KERJA], ['Data diperbarui', DATA.update || '-'], ['*Juni', 'tidak masuk baseline (data MRP mulai 18 Juni)']],
+        baris: [['Pengali shift', p.pengali], ['Cadangan (% dari lead time)', p.cadangan], ['Lead time bawaan (hari)', p.ltDefault], ['Hari kerja per bulan', HARI_KERJA], ['Data diperbarui', DATA.update || '-'], ['Metode baseline', p.metode === 'median' ? 'Median Agustus–Oktober' : 'Rata-rata Agustus–Oktober'], ['*Bulan tidak masuk baseline', 'Juni (data mulai 18 Juni), Juli (lonjakan sekali jalan), November (belum penuh)']],
         lebar: [32, 44],
       },
       { nama: 'Panduan', kolom: ['Topik', 'Penjelasan'], baris: PANDUAN, lebar: [28, 110] },
@@ -84,8 +86,9 @@
             <label>Pengali shift<input class="input" id="fcPengali" type="number" min="0.5" max="4" step="0.1" inputmode="decimal" value="${p.pengali}"></label>
             <label>Cadangan (% lead time)<input class="input" id="fcCadangan" type="number" min="0" max="200" step="5" inputmode="numeric" value="${p.cadangan}"></label>
             <label>Lead time bawaan (hari)<input class="input" id="fcLt" type="number" min="0" max="90" step="1" inputmode="numeric" value="${p.ltDefault}"></label>
+            <label>Baseline<select class="input" id="fcMetode"><option value="rata"${p.metode === 'rata' ? ' selected' : ''}>Rata-rata 3 bulan (seperti FR)</option><option value="median"${p.metode === 'median' ? ' selected' : ''}>Median 3 bulan (tahan lonjakan)</option></select></label>
           </div>
-          <div class="teks-kecil" style="margin-top:10px">Baseline 1 shift = rata-rata pemakaian Juli–Oktober. Skenario = baseline × pengali (2 = permintaan naik dua kali lipat). Cadangan = pengaman sebagai persen dari lead time part itu (lead time 20 hari dengan cadangan 30% = 6 hari ekstra). Saran order = kebutuhan 1 bulan + pemakaian selama (lead time + cadangan) − stok Cinere. Lead time dari riwayat PO VinFast per part; kalau belum ada riwayat dipakai lead time bawaan.</div>
+          <div class="teks-kecil" style="margin-top:10px">Baseline 1 shift = pemakaian Agustus–Oktober (rata-rata, atau median yang tidak ikut tertarik lonjakan sekali jalan). Skenario = baseline × pengali (2 = permintaan naik dua kali lipat). Cadangan = pengaman sebagai persen dari lead time part itu (lead time 20 hari dengan cadangan 30% = 6 hari ekstra). Saran order = kebutuhan 1 bulan + pemakaian selama (lead time + cadangan) − stok Cinere. Lead time dari riwayat PO VinFast per part; kalau belum ada riwayat dipakai lead time bawaan.</div>
         </div>
       </section>
       <section class="bagian" id="fcRingkas" aria-label="Ringkasan"></section>
@@ -98,9 +101,11 @@
       p.pengali = ambilAngka('fcPengali', 2, 0.5, 4);
       p.cadangan = ambilAngka('fcCadangan', 30, 0, 200);
       p.ltDefault = ambilAngka('fcLt', 7, 0, 90);
+      p.metode = $('fcMetode').value === 'median' ? 'median' : 'rata';
       simpan(); gambar();
     };
     ['fcPengali', 'fcCadangan', 'fcLt'].forEach(id => $(id).addEventListener('input', ubah));
+    $('fcMetode').addEventListener('change', ubah);
     $('fcDaftar').addEventListener('click', e => { const k = e.target.closest('.po'); if (k && k.dataset.kode) detail(k.dataset.kode); });
     if (DATA) { ui.setSub(subTeks()); gambar(); } else muat();
   }
@@ -147,6 +152,7 @@
           <span class="badge abu">1 shift <b>${angka(Math.round(x.base))}</b></span>
           <span class="badge ${x.stok <= 0 ? 'merah' : ''}">Stok <b>${angka(x.stok)}</b></span>
           <span class="badge ${x.order > 0 ? 'oranye titik' : ''}">${x.order > 0 ? 'Order <b>' + angka(x.order) + '</b>' : 'Cukup'}</span>
+          ${x.orderFR > 0 ? `<span class="badge abu">FR Nov <b>${angka(x.orderFR)}</b></span>` : ''}
         </span>
       </button>`).join('');
   }
@@ -154,13 +160,13 @@
   function detail(kode) {
     const x = DATA.rows.map(hitung).find(y => y.kode === kode);
     if (!x) return;
-    const nama = ['Juni*', 'Juli', 'Agustus', 'September', 'Oktober'];
+    const nama = ['Juni*', 'Juli*', 'Agustus', 'September', 'Oktober', 'November*'];
     sheet.buka(esc(x.kode), `
       <div class="detail-baris"><span>Nama part</span><span>${esc(x.nama)}</span></div>
       <div class="pemisah"></div>
       <h3 class="judul-kecil">Pemakaian Cinere (1 shift)</h3>
       ${x.bulan.map((v, i) => `<div class="detail-baris"><span>${nama[i]}</span><span>${angka(v)} pcs</span></div>`).join('')}
-      <div class="teks-kecil">*Juni belum penuh (data MRP mulai 18 Juni), tidak masuk baseline.</div>
+      <div class="teks-kecil">Baseline = Agustus–Oktober (${p.metode === 'median' ? 'median' : 'rata-rata'}). *Tidak masuk baseline: Juni (data mulai 18 Juni), Juli (sering ada lonjakan sekali jalan), November (bulan berjalan, belum penuh). Sumber: ${esc(x.sumber)}.</div>
       <div class="pemisah"></div>
       <h3 class="judul-kecil">Skenario ×${desimal(p.pengali)}</h3>
       <div class="detail-baris"><span>Baseline 1 shift / bulan</span><span>${desimal(x.base)} pcs</span></div>
@@ -169,7 +175,8 @@
       <div class="detail-baris"><span>Cadangan (${p.cadangan}%)</span><span>${desimal(x.lt * p.cadangan / 100)} hari</span></div>
       <div class="detail-baris"><span>Target stok</span><span>${angka(x.target)} pcs</span></div>
       <div class="detail-baris"><span>Stok Cinere (${x.dariKS ? 'KS' : 'snapshot, tidak ada di KS'})</span><span>${angka(x.stok)} pcs${x.cover != null ? ` · cukup ±${desimal(x.cover)} hari kerja` : ''}</span></div>
-      <div class="detail-baris"><span><b>Saran order</b></span><span><b>${angka(x.order)} pcs</b></span></div>`);
+      <div class="detail-baris"><span><b>Saran order</b></span><span><b>${angka(x.order)} pcs</b></span></div>
+      <div class="detail-baris"><span>Qty Order di FR Nov</span><span>${angka(x.orderFR)} pcs</span></div>`);
   }
 
   App.daftar({
