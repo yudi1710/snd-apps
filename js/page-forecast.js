@@ -19,6 +19,8 @@
   const desimal = n => (Math.round(n * 10) / 10).toLocaleString('id-ID');
 
   function hitung(r) {
+    const dariKS = KS && KS.has(r[0].toUpperCase());
+    const stok = dariKS ? KS.get(r[0].toUpperCase()) : r[7];
     const base = BULAN_DIPAKAI.reduce((s, i) => s + r[i], 0) / BULAN_DIPAKAI.length; // 1 shift per bulan
     const fc = base * p.pengali; // skenario per bulan
     const lt = r[8] == null ? p.ltDefault : r[8];
@@ -26,8 +28,6 @@
     const target = Math.ceil(fc + perHari * lt * (1 + p.cadangan / 100)); // kebutuhan 1 bulan + penyangga selama lead time & cadangan
     const order = Math.max(0, target - stok);
     const cover = perHari > 0 ? stok / perHari : null; // stok cukup berapa hari kerja
-    const dariKS = KS && KS.has(r[0].toUpperCase());
-    const stok = dariKS ? KS.get(r[0].toUpperCase()) : r[7];
     return { kode: r[0], nama: r[1], base, fc, lt, ltAsli: r[8] != null, stok, dariKS, target, order, cover, bulan: r.slice(2, 7), po: r[9] };
   }
 
