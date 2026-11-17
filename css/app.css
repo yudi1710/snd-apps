@@ -435,3 +435,8 @@ button.notif { font: inherit; color: inherit; }
   .fc-sel { font-size: 14px; }
 }
 @media (min-width: 900px) { .fc-tile-lebar { grid-column: span 2; } }
+
+/* Forecast: tanpa kolom FR */
+@media (min-width: 760px) {
+  .fc-kepala, .fc-baris { grid-template-columns: minmax(0, 2.4fr) repeat(4, minmax(0, .8fr)) minmax(0, 1.1fr) minmax(0, 1.3fr); }
+}

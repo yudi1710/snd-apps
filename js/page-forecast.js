@@ -2,7 +2,7 @@
  * Halaman: Forecast Cinere (fast moving, skenario 2 shift).
  * Data dasar dari tab "Forecast Cinere" (Stock Bot, dari Moving + Incoming Part MRP Cinere).
  * Baris: [kode, nama, juni, juli, agustus, september, oktober, november(parsial), stokSnapshot, leadTimeHari|null, jumlahPO, sumber, orderFR].
- * Pemakaian dari Outgoing Part (sumber sama dengan FR Nov). Baseline 1 shift = Agustus-Oktober (3 bulan, sama dengan FR Nov);
+ * Pemakaian dari Outgoing Part. Baseline 1 shift = Agustus-Oktober (3 bulan);
  * Juni (data mulai 18 Juni), Juli (ada lonjakan sekali jalan), dan November (belum penuh) tidak masuk baseline.
  * Jumlah shift, stok pengaman, dan lead time bawaan bisa diatur dan diingat di perangkat.
  */
@@ -14,6 +14,7 @@
   let DATA = null;
   let KS = null; // Map kode -> balance KS Cinere (stok terkini dari menu KS)
   let infoKS = '';
+  let kelompok = 'semua'; // semua | fast | lain
   let ui = null;
   let p = Object.assign({ naik: 100, cadangan: 30, ltDefault: 7, metode: 'rata', lain: false }, (() => { try { return JSON.parse(localStorage.getItem(KUNCI)) || {}; } catch (e) { return {}; } })());
 
@@ -32,24 +33,24 @@
     const target = Math.ceil(fc + perHari * lt * (1 + p.cadangan / 100)); // kebutuhan 1 bulan + penyangga selama lead time & cadangan
     const order = Math.max(0, target - stok);
     const cover = perHari > 0 ? stok / perHari : null; // stok cukup berapa hari kerja
-    return { kode: r[0], nama: r[1], base, fc, lt, ltAsli: r[9] != null, stok, dariKS, target, order, cover, bulan: r.slice(2, 8), po: r[10], sumber: r[11], orderFR: r[12],
+    return { kode: r[0], nama: r[1], base, fc, lt, ltAsli: r[9] != null, stok, dariKS, target, order, cover, bulan: r.slice(2, 8), po: r[10], sumber: r[11], fast: /fast/i.test(r[11] || ''),
       harga: r[13] || null, hargaNormal: r[14] || null,
-      nilai: r[13] ? order * r[13] : null, nilaiFR: r[13] ? r[12] * r[13] : null };
+      nilai: r[13] ? order * r[13] : null };
   }
 
   // ---------- buku panduan (dipakai di aplikasi dan di sheet Panduan pada Excel) ----------
   const PANDUAN = [
     ['Tujuan', 'Memperkirakan kebutuhan part fast moving Cinere kalau jam kerja naik dari 1 shift ke 2 shift, lalu menghitung berapa yang perlu di-order ke VinFast supaya stok tidak habis.'],
-    ['Langkah 1: Baseline', 'Pemakaian per bulan dihitung dari tab Outgoing Part MRP Cinere (sumber yang sama dengan FR). Baseline 1 shift = pemakaian Agustus sampai Oktober, rata-rata atau median (median tidak ikut tertarik lonjakan sekali jalan). Tidak masuk baseline: Juni (data mulai 18 Juni), Juli (sering ada lonjakan), November (bulan berjalan, belum penuh). Part yang masuk daftar: berlabel Fast Move di tab Moving, ditambah part yang punya Qty Order di sheet FR bulan ini. HANKOOK dan Massive/Massiv EV dikecualikan.'],
-    ['Langkah 2: Jumlah shift', 'Pilih 1 shift (pemakaian apa adanya, sama dengan FR) atau 2 shift (pemakaian naik 100%, jadi dua kali lipat). Untuk angka lain pilih Atur sendiri: isi berapa persen pemakaian naik dari 1 shift (0% = 1 shift, 50% = 1,5 kali, 100% = 2 shift). Forecast per bulan = baseline × (1 + kenaikan%). Angka kenaikan ini asumsi, cocokkan lagi dengan data nyata setelah 2 shift berjalan beberapa minggu.'],
+    ['Langkah 1: Baseline', 'Pemakaian per bulan dihitung dari tab Outgoing Part MRP Cinere . Baseline 1 shift = pemakaian Agustus sampai Oktober, rata-rata atau median (median tidak ikut tertarik lonjakan sekali jalan). Tidak masuk baseline: Juni (data mulai 18 Juni), Juli (sering ada lonjakan), November (bulan berjalan, belum penuh). Daftar part terdiri dari Fast Move (berlabel Fast Move di tab Moving) dan part lain yang ikut direncanakan order bulan ini; gunakan filter Kelompok untuk memisahkannya. HANKOOK dan Massive/Massiv EV dikecualikan.'],
+    ['Langkah 2: Jumlah shift', 'Pilih 1 shift (pemakaian apa adanya) atau 2 shift (pemakaian naik 100%, jadi dua kali lipat). Untuk angka lain pilih Atur sendiri: isi berapa persen pemakaian naik dari 1 shift (0% = 1 shift, 50% = 1,5 kali, 100% = 2 shift). Forecast per bulan = baseline × (1 + kenaikan%). Angka kenaikan ini asumsi, cocokkan lagi dengan data nyata setelah 2 shift berjalan beberapa minggu.'],
     ['Langkah 3: Pemakaian per hari', 'Pemakaian per hari = forecast per bulan ÷ 26 hari kerja.'],
     ['Langkah 4: Lead time', 'Lead time = jarak hari dari PO dibuat sampai barang diterima di Cinere, rata-rata dari riwayat PO VinFast per part (tab Incoming Part). Part tanpa riwayat PO memakai lead time bawaan.'],
     ['Langkah 5: Cadangan', 'Stok pengaman = tambahan stok sebagai persen dari lead time part itu. Contoh 30%: lead time 20 hari dapat cadangan 6 hari, lead time 2 hari dapat 0,6 hari. Pilihan: Tipis 15%, Normal 30%, Aman 50%. Pilih Aman kalau takut telat dari VinFast, Tipis kalau stok mau diketatkan.'],
     ['Langkah 6: Target stok', 'Target stok = forecast 1 bulan + pemakaian per hari × lead time × (1 + cadangan%). Artinya stok harus cukup untuk bertahan sampai barang datang (plus pengaman) dan melayani 1 bulan setelahnya.'],
     ['Langkah 7: Saran order', 'Saran order = target stok − stok Cinere sekarang (minimal 0). Daftar diurutkan dari yang paling perlu order.'],
-    ['Langkah 8: Harga dan total', 'Harga per pcs = harga wholesale, yaitu harga beli PO terakhir dari VinFast (sama dengan Unit Price Wholesale di FR; harga normal dari FR ditampilkan di rincian bila ada). Total = saran order × harga wholesale. Order dibagi dua tahap seperti FR: Order Pertama (setengah, dibulatkan ke atas) dan Order Kedua (sisanya). Part yang belum pernah di-PO dan tidak ada di FR belum punya harga, ditandai tanda strip.'],
+    ['Langkah 8: Harga dan total', 'Harga per pcs = harga wholesale, yaitu harga beli PO terakhir dari VinFast (harga normal ditampilkan di rincian bila ada). Total = saran order × harga wholesale. Order dibagi dua tahap: Order Pertama (setengah, dibulatkan ke atas) dan Order Kedua (sisanya). Part yang belum pernah di-PO belum punya harga, ditandai tanda strip.'],
     ['Contoh', 'Baseline 40 pcs/bulan, kenaikan 50% (×1,5), lead time 20 hari, stok pengaman 30%, stok 20 pcs. Forecast = 60 pcs/bulan (2,3 pcs/hari). Pemakaian selama 26 hari (20 × 1,3) = ±60 pcs. Target = 60 + 60 = 120 pcs. Saran order = 120 − 20 = 100 pcs.'],
-    ['Batasan', 'Pemakaian beberapa part bergelombang (misalnya 240 pcs di satu bulan lalu 3 dan 0), sehingga rata-rata bisa menyesatkan; coba baseline median dan cek rincian bulanannya. Kolom Qty Order FR Nov dipakai sebagai pembanding dengan order yang sudah direncanakan di sheet FR. Stok Cinere diambil dari balance menu KS (kartu stok Cinere), jadi mengikuti data KS terkini; part yang tidak ada di KS memakai angka snapshot dari tab Moving. Ini alat bantu perkiraan, keputusan order tetap perlu dicek manual. Data diperbarui oleh Stock Bot, lihat waktu pembaruan di bawah judul halaman.'],
+    ['Batasan', 'Pemakaian beberapa part bergelombang (misalnya 240 pcs di satu bulan lalu 3 dan 0), sehingga rata-rata bisa menyesatkan; coba baseline median dan cek rincian bulanannya. Stok Cinere diambil dari balance menu KS (kartu stok Cinere), jadi mengikuti data KS terkini; part yang tidak ada di KS memakai angka snapshot dari tab Moving. Ini alat bantu perkiraan, keputusan order tetap perlu dicek manual. Data diperbarui oleh Stock Bot, lihat waktu pembaruan di bawah judul halaman.'],
   ];
 
   function panduan() {
@@ -58,17 +59,22 @@
 
   function ekspor() {
     if (!DATA || !window.Ekspor) return;
-    const h = DATA.rows.map(hitung).sort((a, b) => b.order - a.order || b.fc - a.fc);
+    const semua = DATA.rows.map(hitung);
+    const nFast = semua.filter(x => x.fast).length;
+    const bar = $('fcKelompok');
+    if (bar) bar.innerHTML = [['semua', 'Semua', semua.length], ['fast', 'Fast Move', nFast], ['lain', 'Part lain', semua.length - nFast]]
+      .map(([k, n, j]) => '<button type="button" class="chip' + (kelompok === k ? ' aktif' : '') + '" data-kel="' + k + '">' + n + '<b>' + j + '</b></button>').join('');
+    const h = semua.filter(x => kelompok === 'semua' || (kelompok === 'fast') === x.fast).sort((a, b) => b.order - a.order || b.fc - a.fc);
     if (!h.length) { App.toast('Tidak ada data untuk diekspor.', true); return; }
     const bulan = x => x.bulan;
     Ekspor.unduh(Ekspor.namaDenganTanggal('snd-forecast-cinere'), [
       {
         nama: 'Forecast',
-        kolom: ['Kode Part', 'Nama Part', 'Juni*', 'Juli*', 'Agustus', 'September', 'Oktober', 'November* (parsial)', 'Baseline 1 shift/bln', 'Pengali', 'Forecast/bln', 'Pemakaian/hari', 'Lead time (hari)', 'Sumber lead time', 'Cadangan (hari)', 'Target stok', 'Stok Cinere (KS)', 'Cukup (hari kerja)', 'Saran order', 'Harga Wholesale/pcs', 'Harga Normal/pcs', 'Total Saran Order (Rp)', 'Order Pertama (pcs)', 'Total Order Pertama (Rp)', 'Order Kedua (pcs)', 'Total Order Kedua (Rp)', 'Qty Order FR Nov', 'Total FR Nov (Rp)', 'Sumber part'],
+        kolom: ['Kode Part', 'Nama Part', 'Juni*', 'Juli*', 'Agustus', 'September', 'Oktober', 'November* (parsial)', 'Baseline 1 shift/bln', 'Pengali', 'Forecast/bln', 'Pemakaian/hari', 'Lead time (hari)', 'Sumber lead time', 'Cadangan (hari)', 'Target stok', 'Stok Cinere (KS)', 'Cukup (hari kerja)', 'Saran order', 'Harga Wholesale/pcs', 'Harga Normal/pcs', 'Total Saran Order (Rp)', 'Order Pertama (pcs)', 'Total Order Pertama (Rp)', 'Order Kedua (pcs)', 'Total Order Kedua (Rp)', 'Kelompok'],
         baris: h.map(x => [x.kode, x.nama, ...bulan(x), Math.round(x.base * 10) / 10, mult(), Math.round(x.fc * 10) / 10, Math.round(x.fc / HARI_KERJA * 100) / 100,
           x.lt, x.ltAsli ? x.po + ' PO' : 'bawaan', Math.round(x.lt * p.cadangan / 100 * 10) / 10, x.target, x.stok, x.cover == null ? '' : Math.round(x.cover * 10) / 10, x.order,
           x.harga || '', x.hargaNormal || '', x.harga ? Math.round(x.nilai) : '', Math.ceil(x.order / 2), x.harga ? Math.ceil(x.order / 2) * x.harga : '', Math.floor(x.order / 2), x.harga ? Math.floor(x.order / 2) * x.harga : '',
-          x.orderFR, x.harga ? Math.round(x.nilaiFR) : '', x.sumber]),
+          x.fast ? 'Fast Move' : 'Part lain']),
       },
       {
         nama: 'Parameter',
@@ -107,13 +113,14 @@
             <summary>Pengaturan lanjutan</summary>
             <div class="fc-param" style="margin-top:10px">
               <label class="fc-grup"><span class="fc-label">Lead time bila belum ada riwayat PO (hari)</span><input class="input" id="fcLt" type="number" min="0" max="90" step="1" inputmode="numeric" value="${p.ltDefault}"></label>
-              <label class="fc-grup"><span class="fc-label">Cara hitung baseline</span><select class="input" id="fcMetode"><option value="rata"${p.metode === 'rata' ? ' selected' : ''}>Rata-rata 3 bulan (seperti FR)</option><option value="median"${p.metode === 'median' ? ' selected' : ''}>Median 3 bulan (tahan lonjakan)</option></select></label>
+              <label class="fc-grup"><span class="fc-label">Cara hitung baseline</span><select class="input" id="fcMetode"><option value="rata"${p.metode === 'rata' ? ' selected' : ''}>Rata-rata 3 bulan</option><option value="median"${p.metode === 'median' ? ' selected' : ''}>Median 3 bulan (tahan lonjakan)</option></select></label>
             </div>
           </details>
           <div class="teks-kecil" style="margin-top:10px">Pemakaian 1 shift = rata-rata Agustus–Oktober. Stok pengaman = tambahan stok sebesar persen dari lead time part itu. Cara hitung lengkap ada di tombol Panduan.</div>
         </div>
       </section>
       <section class="bagian" id="fcRingkas" aria-label="Ringkasan"></section>
+      <section class="bagian" aria-label="Filter kelompok"><div class="chips" id="fcKelompok"></div></section>
       <section class="bagian" aria-label="Daftar part"><div class="daftar" id="fcDaftar"><div class="kosong">${ikon.kosong}<div>Memuat data…</div></div></div></section>`;
     $('btnPanduan').addEventListener('click', panduan);
     $('btnEkspor').addEventListener('click', ekspor);
@@ -134,6 +141,7 @@
     });
     $('fcLt').addEventListener('input', e => { const v = parseFloat(e.target.value); p.ltDefault = Number.isFinite(v) ? Math.min(90, Math.max(0, v)) : 7; simpan(); gambar(); });
     $('fcMetode').addEventListener('change', e => { p.metode = e.target.value === 'median' ? 'median' : 'rata'; simpan(); gambar(); });
+    $('fcKelompok').addEventListener('click', e => { const c = e.target.closest('[data-kel]'); if (c) { kelompok = c.dataset.kel; gambar(); } });
     $('fcDaftar').addEventListener('click', e => { const k = e.target.closest('[data-kode]'); if (k) detail(k.dataset.kode); });
     if (DATA) { ui.setSub(subTeks()); gambar(); } else muat();
   }
@@ -164,16 +172,21 @@
 
   function gambar() {
     if (!DATA) return;
-    const h = DATA.rows.map(hitung).sort((a, b) => b.order - a.order || b.fc - a.fc);
+    const semua = DATA.rows.map(hitung);
+    const nFast = semua.filter(x => x.fast).length;
+    const bar = $('fcKelompok');
+    if (bar) bar.innerHTML = [['semua', 'Semua', semua.length], ['fast', 'Fast Move', nFast], ['lain', 'Part lain', semua.length - nFast]]
+      .map(([k, n, j]) => '<button type="button" class="chip' + (kelompok === k ? ' aktif' : '') + '" data-kel="' + k + '">' + n + '<b>' + j + '</b></button>').join('');
+    const h = semua.filter(x => kelompok === 'semua' || (kelompok === 'fast') === x.fast).sort((a, b) => b.order - a.order || b.fc - a.fc);
     if (!h.length) { $('fcRingkas').innerHTML = ''; $('fcDaftar').innerHTML = `<div class="kosong">${ikon.kosong}<div>Belum ada data fast moving. Jalankan sinkron forecast di Stock Bot.</div></div>`; return; }
-    const tot = h.reduce((s, x) => ({ base: s.base + x.base, fc: s.fc + x.fc, order: s.order + x.order, perlu: s.perlu + (x.order > 0 ? 1 : 0), nilai: s.nilai + (x.nilai || 0), nilaiFR: s.nilaiFR + (x.nilaiFR || 0), tanpaHarga: s.tanpaHarga + (x.order > 0 && !x.harga ? 1 : 0) }), { base: 0, fc: 0, order: 0, perlu: 0, nilai: 0, nilaiFR: 0, tanpaHarga: 0 });
+    const tot = h.reduce((s, x) => ({ base: s.base + x.base, fc: s.fc + x.fc, order: s.order + x.order, perlu: s.perlu + (x.order > 0 ? 1 : 0), nilai: s.nilai + (x.nilai || 0), tanpaHarga: s.tanpaHarga + (x.order > 0 && !x.harga ? 1 : 0) }), { base: 0, fc: 0, order: 0, perlu: 0, nilai: 0, tanpaHarga: 0 });
     $('fcRingkas').innerHTML = `<div class="fc-tiles">
       <div class="fc-tile"><small>Jumlah part</small><b>${angka(h.length)}</b></div>
       <div class="fc-tile"><small>Pemakaian 1 shift / bln</small><b>${angka(Math.round(tot.base))}</b><span>pcs</span></div>
       <div class="fc-tile"><small>Skenario ${esc(namaSkenario())} / bln</small><b>${angka(Math.round(tot.fc))}</b><span>pcs</span></div>
       <div class="fc-tile"><small>Perlu order</small><b>${angka(tot.perlu)}</b><span>${angka(tot.order)} pcs</span></div>
-      <div class="fc-tile fc-tile-lebar"><small>Estimasi nilai order</small><b>${rp(tot.nilai)}</b><span>FR Nov: ${rp(tot.nilaiFR)}${tot.tanpaHarga ? ' · ' + tot.tanpaHarga + ' part belum ada harga' : ''}</span></div></div>`;
-    $('fcDaftar').innerHTML = '<div class="fc-kepala"><span>Part</span><span>1 shift</span><span>Skenario</span><span>Stok</span><span>Saran order</span><span>Harga/pcs</span><span>Total (Rp)</span><span>FR Nov</span></div>' + h.map(x => `
+      <div class="fc-tile fc-tile-lebar"><small>Estimasi nilai order</small><b>${rp(tot.nilai)}</b><span>${tot.tanpaHarga ? tot.tanpaHarga + ' part belum ada harga' : 'dari harga wholesale'}</span></div></div>`;
+    $('fcDaftar').innerHTML = '<div class="fc-kepala"><span>Part</span><span>1 shift</span><span>Skenario</span><span>Stok</span><span>Saran order</span><span>Harga/pcs</span><span>Total (Rp)</span></div>' + h.map(x => `
       <button type="button" class="fc-baris" data-kode="${esc(x.kode)}">
         <span class="fc-part"><span class="fc-kode">${esc(x.kode)}</span><span class="fc-nama">${esc(x.nama)}</span></span>
         <span class="fc-sel" data-l="1 shift">${angka(Math.round(x.base))}</span>
@@ -182,7 +195,7 @@
         <span class="fc-sel fc-order ${x.order > 0 ? 'perlu' : 'cukup'}" data-l="Saran order">${x.order > 0 ? angka(x.order) : 'Cukup'}</span>
         <span class="fc-sel fc-harga" data-l="Harga/pcs">${x.harga ? angka(x.harga) : '–'}</span>
         <span class="fc-sel fc-total" data-l="Total (Rp)">${x.order > 0 && x.harga ? angka(Math.round(x.nilai)) : '–'}</span>
-        <span class="fc-sel fc-fr" data-l="FR Nov">${x.orderFR > 0 ? angka(x.orderFR) : '–'}</span>
+
       </button>`).join('');
   }
 
@@ -195,7 +208,7 @@
       <div class="pemisah"></div>
       <h3 class="judul-kecil">Pemakaian Cinere (1 shift)</h3>
       ${x.bulan.map((v, i) => `<div class="detail-baris"><span>${nama[i]}</span><span>${angka(v)} pcs</span></div>`).join('')}
-      <div class="teks-kecil">Baseline = Agustus–Oktober (${p.metode === 'median' ? 'median' : 'rata-rata'}). *Tidak masuk baseline: Juni (data mulai 18 Juni), Juli (sering ada lonjakan sekali jalan), November (bulan berjalan, belum penuh). Sumber: ${esc(x.sumber)}.</div>
+      <div class="teks-kecil">Baseline = Agustus–Oktober (${p.metode === 'median' ? 'median' : 'rata-rata'}). *Tidak masuk baseline: Juni (data mulai 18 Juni), Juli (sering ada lonjakan sekali jalan), November (bulan berjalan, belum penuh). Kelompok: ${x.fast ? 'Fast Move' : 'Part lain'}.</div>
       <div class="pemisah"></div>
       <h3 class="judul-kecil">Skenario ×${desimal(mult())}</h3>
       <div class="detail-baris"><span>Baseline 1 shift / bulan</span><span>${desimal(x.base)} pcs</span></div>
@@ -212,8 +225,8 @@
       <div class="detail-baris"><span><b>Total saran order</b></span><span><b>${rp(x.nilai)}</b></span></div>
       ${x.order > 0 ? `<div class="detail-baris"><span>Order pertama (${angka(Math.ceil(x.order / 2))} pcs)</span><span>${rp(Math.ceil(x.order / 2) * x.harga)}</span></div>
       <div class="detail-baris"><span>Order kedua (${angka(Math.floor(x.order / 2))} pcs)</span><span>${rp(Math.floor(x.order / 2) * x.harga)}</span></div>` : ''}
-      <div class="detail-baris"><span>Qty order di FR Nov</span><span>${angka(x.orderFR)} pcs · ${rp(x.nilaiFR)}</span></div>
-      <div class="teks-kecil">Harga wholesale = harga beli PO terakhir dari VinFast (sama dengan Unit Price Wholesale di FR).</div>` : `<div class="teks-kecil">Belum ada harga untuk part ini (belum pernah di-PO dan tidak ada di FR). Qty order di FR Nov: ${angka(x.orderFR)} pcs.</div>`}`);
+
+      <div class="teks-kecil">Harga wholesale = harga beli PO terakhir dari VinFast.</div>` : `<div class="teks-kecil">Belum ada harga untuk part ini (belum pernah di-PO).</div>`}`);
   }
 
   App.daftar({
