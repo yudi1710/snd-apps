@@ -58,11 +58,11 @@
             <option value="tinggi">Urut: balance tertinggi</option>
             <option value="keluar">Urut: outgoing terbanyak</option>
           </select>
+          <select class="input" id="cabang" name="cabang" aria-label="Cabang"></select>
         </div>
-        <div class="chips" id="chips" role="group" aria-label="Cabang" style="margin-top:10px"></div>
       </section>
       <section class="bagian" aria-label="Daftar part">
-        <div class="teks-kecil" id="ringkas" aria-live="polite" style="margin:0 2px 8px"></div>
+        <div class="ringkas-filter"><span class="teks-kecil" id="ringkas" aria-live="polite"></span><button type="button" class="tombol halus kecil" id="resetFilter" hidden>Reset filter</button></div>
         <div class="daftar ks-daftar" id="daftar">${Array.from({ length: 6 }, () => '<div class="po ks"><div class="skeleton" style="width:55%"></div><div class="skeleton" style="width:80%;margin-top:8px"></div></div>').join('')}</div>
       </section>`;
 
@@ -71,7 +71,8 @@
     $('segTampil').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { F.tampil = b.dataset.t; F.batas = 120; simpanFilter(); semua(); } });
     $('cari').addEventListener('input', e => { F.q = e.target.value.trim().toUpperCase(); F.batas = 120; simpanFilter(); daftar(); });
     $('urut').addEventListener('change', e => { F.urut = e.target.value; F.batas = 120; simpanFilter(); daftar(); });
-    $('chips').addEventListener('click', e => { const c = e.target.closest('.chip'); if (c) { F.cabang = c.dataset.c; F.batas = 120; simpanFilter(); semua(); } });
+    $('cabang').addEventListener('change', e => { F.cabang = e.target.value; F.batas = 120; simpanFilter(); semua(); });
+    $('resetFilter').addEventListener('click', () => { Object.assign(F, { cabang: '', q: '', kpi: '', batas: 120 }); $('cari').value = ''; simpanFilter(); semua(); $('cari').focus(); });
     $('kpi').addEventListener('click', e => { const t = e.target.closest('.ubin'); if (!t || !t.dataset.k) return; F.kpi = F.kpi === t.dataset.k ? '' : t.dataset.k; F.batas = 120; simpanFilter(); semua(); });
     $('daftar').addEventListener('click', e => {
       if (e.target.closest('#lagi')) { F.batas += 120; daftar(); return; }
@@ -116,31 +117,38 @@
 
   function semua() {
     document.querySelectorAll('#segTampil button').forEach(b => { const on = b.dataset.t === F.tampil; b.classList.toggle('aktif', on); b.setAttribute('aria-pressed', on); });
-    kpi(); chips(); daftar();
+    kpi(); cabangSelect(); daftar();
   }
 
   const dasar = () => DATA.rows.filter(r => !F.cabang || r[C] === F.cabang);
+  /** Jumlah yang tampil di daftar: kode part unik (Gabungan) atau baris cabang (Per cabang). */
+  const hitungDaftar = rows => (F.tampil === 'gabungan' ? new Set(rows.map(x => x[K])).size : rows.length);
+  const FILTER_KPI = { habis, minus, dmg: adaDmg, selisih, belumsv: r => !adaSv(r) };
 
+  /** Angka tiap kartu = jumlah item yang muncul kalau kartu diklik (ikut filter cabang dan pencarian yang aktif). */
   function kpi() {
-    const r = dasar();
-    const kode = new Set(r.map(x => x[K]));
+    const r = dasar().filter(x => cocok(x[K] + ' ' + x[D]));
+    const hitung = f => hitungDaftar(r.filter(f));
     const u = [
-      ['semua', 'Total part', kode.size, ''],
-      ['habis', 'Balance 0', r.filter(habis).length, 'oranye'],
-      ['minus', 'Balance minus', r.filter(minus).length, 'merah'],
-      ['dmg', 'Ada damage', r.filter(adaDmg).length, 'merah'],
-      ['selisih', 'Selisih vs Servia', r.filter(selisih).length, 'oranye'],
-      ['belumsv', 'Belum ada di Servia', DATA.updateServia ? r.filter(x => !adaSv(x)).length : 0, 'oranye'],
+      ['semua', 'Total part', hitungDaftar(r), ''],
+      ['habis', 'Balance 0', hitung(habis), 'oranye'],
+      ['minus', 'Balance minus', hitung(minus), 'merah'],
+      ['dmg', 'Ada damage', hitung(adaDmg), 'merah'],
+      ['selisih', 'Selisih vs Servia', hitung(selisih), 'oranye'],
+      ['belumsv', 'Belum ada di Servia', DATA.updateServia ? hitung(FILTER_KPI.belumsv) : 0, 'oranye'],
     ];
     $('kpi').innerHTML = u.map(([id, l, n, w]) =>
       `<button type="button" class="ubin ${F.kpi === id ? 'aktif' : ''}" data-k="${id}" aria-pressed="${F.kpi === id}"><span class="label">${esc(l)}</span><span class="nilai">${angka(n)}</span>${n && w ? `<span class="penanda ${w}"><span class="sr">, perlu perhatian</span></span>` : ''}</button>`).join('');
   }
 
-  function chips() {
-    const n = {};
-    DATA.rows.forEach(r => { n[r[C]] = (n[r[C]] || 0) + 1; });
-    $('chips').innerHTML = [`<button type="button" class="chip ${F.cabang ? '' : 'aktif'}" data-c="" aria-pressed="${!F.cabang}">Semua cabang</button>`]
-      .concat(DATA.cabang.slice().sort().map(c => `<button type="button" class="chip ${F.cabang === c ? 'aktif' : ''}" data-c="${esc(c)}" aria-pressed="${F.cabang === c}">${esc(c)}<b>${n[c] || 0}</b></button>`)).join('');
+  /** Dropdown cabang; angka di sebelah nama mengikuti kartu dan pencarian yang sedang aktif. */
+  function cabangSelect() {
+    const f = FILTER_KPI[F.kpi] || (() => true);
+    const sesuai = DATA.rows.filter(r => cocok(r[K] + ' ' + r[D]) && f(r));
+    const sel = $('cabang');
+    sel.innerHTML = `<option value="">Semua cabang (${angka(hitungDaftar(sesuai))})</option>` +
+      DATA.cabang.slice().sort().map(c => `<option value="${esc(c)}">${esc(c)} (${angka(hitungDaftar(sesuai.filter(r => r[C] === c)))})</option>`).join('');
+    sel.value = F.cabang;
   }
 
   const cocok = teks => !F.q || teks.toUpperCase().includes(F.q);
@@ -167,10 +175,15 @@
         .map(r => ({ kode: r[K], desc: r[D], balance: r[BAL], keluar: r[OUT], baris: [r] }));
     }
     item.sort(urut);
-    const filterAktif = ['habis', 'minus', 'dmg', 'selisih', 'belumsv'].includes(F.kpi);
-    $('ringkas').textContent = `${angka(item.length)} ${F.tampil === 'gabungan' ? 'kode part' : 'baris'}${F.cabang ? ' · ' + F.cabang : ''}${filterAktif ? ' · filter aktif' : ''}${F.q ? ' · “' + F.q + '”' : ''}`;
+    const NAMA_KPI = { habis: 'balance 0', minus: 'balance minus', dmg: 'ada damage', selisih: 'selisih vs Servia', belumsv: 'belum ada di Servia' };
+    const adaFilter = !!(F.kpi && NAMA_KPI[F.kpi]) || !!F.cabang || !!F.q;
+    // ringkasan menyebut SEMUA filter yang aktif, supaya jelas kenapa jumlahnya segitu
+    $('ringkas').textContent = [`${angka(item.length)} ${F.tampil === 'gabungan' ? 'kode part' : 'baris'}`, NAMA_KPI[F.kpi], F.cabang, F.q && `pencarian “${F.q}”`].filter(Boolean).join(' · ');
+    $('resetFilter').hidden = !adaFilter;
     if (!item.length) {
-      $('daftar').innerHTML = `<div class="kosong">${ikon.kosong}<div>Tidak ada part yang cocok dengan filter ini.</div></div>`;
+      $('daftar').innerHTML = `<div class="kosong">${ikon.kosong}<div>Tidak ada part yang cocok dengan filter ini.</div>${adaFilter ? '<button type="button" class="tombol halus" id="resetKosong">Reset filter</button>' : ''}</div>`;
+      const r = $('resetKosong');
+      if (r) r.addEventListener('click', () => $('resetFilter').click());
       return;
     }
     $('daftar').innerHTML = `<div class="daftar-kepala"><span>Kode part</span><span style="text-align:right">Balance</span><span>${F.tampil === 'gabungan' ? 'Per cabang' : 'Rincian'}</span></div>` +

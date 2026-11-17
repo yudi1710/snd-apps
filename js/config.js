@@ -8,5 +8,5 @@ window.SND_CONFIG = {
   vapidPublicKey: 'BKqSJSBYCxK_zKvQKdHWfp6bb71rTUa_kCEKyWnrTJF4oSaNDL1EF_oqBrCHthyac34kKTCSjxPOBeT_8Oz4UbA',
   // Hanya akun domain ini yang boleh masuk (dicek di browser DAN di server).
   domain: 'otoklix.com',
-  versi: '2026.11.16d',
+  versi: '2026.11.17a',
 };

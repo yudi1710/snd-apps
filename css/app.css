@@ -378,3 +378,9 @@ button.notif { font: inherit; color: inherit; }
 .input-cari.besar svg { left: 12px; width: 18px; height: 18px; }
 .daftar-saran { margin: 6px 0 10px; padding-left: 18px; }
 .daftar-saran li { margin: 4px 0; }
+
+/* Filter yang lebih sederhana */
+[hidden] { display: none !important; }
+.ringkas-filter { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 2px 8px; min-height: 30px; }
+.tombol.kecil { min-height: 28px; padding: 0 10px; font-size: 12px; }
+.grafik-baris { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
