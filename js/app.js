@@ -38,6 +38,7 @@ window.App = (function () {
     pin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>',
     loncengMati: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 9.3-5M18 8c0 4 1 6 2 7H8M10 21h4M3 3l18 18"/></svg>',
     tambah: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+    tugas: '<svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM9 10l2 2 4-4M9 16h6"/></svg>',
     unduh: '<svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg>',
     keluar: '<svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3M13 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg>',
   };
@@ -250,7 +251,25 @@ window.App = (function () {
   }
 
   // ---------- navigasi ----------
-  function daftar(h) { halaman.push(h); }
+  // Halaman pribadi (h.pribadi) tidak masuk menu sampai server mengizinkan (konteks.tugas). Ini hanya soal tampilan;
+  // datanya dijaga di server, jadi akun lain tetap ditolak walau memaksa memanggil API-nya.
+  const tersembunyi = [];
+  function daftar(h) { (h.pribadi ? tersembunyi : halaman).push(h); }
+
+  function aktifkanPribadi(id, ya) {
+    if (ya) {
+      const i = tersembunyi.findIndex(h => h.id === id);
+      if (i < 0) return;
+      halaman.push(tersembunyi.splice(i, 1)[0]);
+    } else {
+      const i = halaman.findIndex(h => h.id === id);
+      if (i < 0) return;
+      tersembunyi.push(halaman.splice(i, 1)[0]);
+    }
+    navDibangun = false;
+    gambarNav();
+    if (!ya && state.aktif === id) buka(halaman[0] && halaman[0].id);
+  }
 
   // Nav dibangun sekali; hanya penanda menu aktif yang berganti.
   let navDibangun = false;
@@ -322,9 +341,17 @@ window.App = (function () {
 
   function setelahMasuk() {
     gambarPengguna();
+    // menu pribadi diingat per akun supaya langsung muncul (juga saat offline); server tetap yang menentukan lewat getKonteks
+    const KUNCI_PRIBADI = 'snd_pribadi';
+    try { if (localStorage.getItem(KUNCI_PRIBADI) === state.email) aktifkanPribadi('tugas', true); } catch (e) {}
     const awal = infoHash().id;
     buka(halaman.some(h => h.id === awal) ? awal : (halaman[0] && halaman[0].id));
-    api('getKonteks').then(k => { state.konteks = k; }).catch(() => {});
+    api('getKonteks').then(k => {
+      state.konteks = k;
+      aktifkanPribadi('tugas', !!(k && k.tugas));
+      if (k && k.tugas && awal === 'tugas' && state.aktif !== 'tugas') buka('tugas'); // dibuka langsung lewat #tugas sebelum menunya aktif
+      try { if (k && k.tugas) localStorage.setItem(KUNCI_PRIBADI, state.email); else localStorage.removeItem(KUNCI_PRIBADI); } catch (e) {}
+    }).catch(() => {});
     buatSesiBaru();
     window.dispatchEvent(new Event('snd:masuk'));
   }

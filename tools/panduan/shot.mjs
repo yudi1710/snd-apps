@@ -17,9 +17,10 @@ const srv = http.createServer((q, r) => {
 const port = srv.address().port;
 
 let tambahan = {};
+let dikeluarkan = {};
 const respon = (aksi, args) => {
   switch (aksi) {
-    case 'getDataForecast': return { ...D.forecast, tambahan };
+    case 'getDataForecast': return { ...D.forecast, tambahan, dikeluarkan };
     case 'getDataKS': return { rows: D.ksRows, cabang: ['CINERE', 'DEPOK', 'DAAN MOGOT'], gagal: [], update: '17-11-2026 16:06' };
     case 'getRiwayatForecast': return D.riwayat[args[0]] || [];
     case 'getKonteks': return { email: 'nama@otoklix.com', today: '2026-11-17', batas: 3, spreadsheetUrl: '', admin: false };
@@ -202,8 +203,37 @@ await page.evaluate(() => __tandai([{ el: '#fcHapusPart', n: 1, sisi: 'k', jarak
 await simpan(page, 'd12-part-tambahan', await sheetRect(page, 60));
 await page.close();
 
-// ===== MOBILE =====
 D.rows.pop(); tambahan = {};
+
+// ===== KELUARKAN PART DARI ORDER =====
+page = await buka(false);
+await page.evaluate(() => { [...document.querySelectorAll('.fc-baris')].find(b => b.dataset.kode === 'COL70000088').click(); });
+await tunggu(700);
+await page.evaluate(() => { const b = document.querySelector('#sheetBadan'); b.scrollTop = b.scrollHeight; });
+await tunggu(300);
+await page.type('#fcAlasan', 'stok cukup, tidak dipesan bulan ini');
+await page.evaluate(() => __tandai([{ el: '#fcAlasan', n: 1, sisi: 'k', jarak: 36 }, { el: '#fcKeluarkan', n: 2, sisi: 'k', jarak: 36 }]));
+await simpan(page, 'd13-keluarkan', await sheetRect(page, 60));
+await page.close();
+
+dikeluarkan = { 'COL70000088': { nama: 'COOLANT_5L', alasan: 'stok cukup, tidak dipesan bulan ini', oleh: 'ani.pratama@otoklix.com', waktu: '18-11-2026 09:12' } };
+D.riwayat['COL70000088'] = [{ waktu: '18-11-2026 09:12', email: 'ani.pratama@otoklix.com', aksi: 'Keluarkan part', lama: null, baru: null, catatan: 'stok cukup, tidak dipesan bulan ini' }];
+page = await buka(false);
+await page.evaluate(() => { document.querySelector('#fcKeluar summary').click(); });
+await tunggu(300);
+await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+await page.evaluate(() => document.querySelector('#fcKeluar').scrollIntoView({ block: 'end' }));
+await tunggu(300);
+await page.evaluate(() => __tandai([
+  { el: '#fcKeluar summary', n: 1, sisi: 'k', jarak: 36 },
+  { el: '#fcKeluar [data-kembali]', n: 2, sisi: 'a', jarak: 30 }]));
+const rk = await rect(page, '#fcKeluar .kartu');
+const sy2 = await page.evaluate(() => window.scrollY);
+await simpan(page, 'd14-dikeluarkan', { x: 200, y: Math.max(0, rk.y + sy2 - 60), width: 1080, height: rk.height + 100 });
+await page.close();
+dikeluarkan = {};
+
+// ===== MOBILE =====
 page = await buka(true);
 await page.evaluate(() => __tandai([{ el: '.appbar-aksi', n: 'A', sisi: 'b', jarak: 30 }, { el: '#fcKontrol', n: 'B', sisi: 'r', jarak: 0, dx: -20, dy: 0 }]));
 await simpan(page, 'm1-atas');

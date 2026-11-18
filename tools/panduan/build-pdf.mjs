@@ -64,11 +64,11 @@ td.r, th.r { text-align: right }
 ${halaman(`<h2>Sebelum mulai</h2>
 <p>Halaman Forecast Cinere di SND Apps membantu menjawab satu pertanyaan: kalau jam kerja Cinere ditambah, berapa pcs tiap part yang perlu dipesan ke VinFast, dan berapa nilainya? Hasilnya bisa dilihat di layar dan diunduh sebagai file Excel.</p>
 <h3>Yang perlu disiapkan</h3><ul><li>Akun Google <b>@otoklix.com</b> (hanya akun ini yang bisa masuk).</li><li>SND Apps di browser (<b>snd.ryukakirin.me</b>) atau aplikasi SND di HP Android.</li><li>Koneksi internet. Sinkron data butuh sampai sekitar satu menit.</li></ul>
-<h3>Alur singkat: 8 langkah sampai jadi</h3>
-<div class="alur">${['Buka menu Forecast', 'Sinkron data', 'Pilih shift &amp; pengaman', 'Baca ringkasan &amp; tabel', 'Lihat rincian part', 'Isi harga manual', 'Tambah part dari KS', 'Unduh Excel'].map((t, i) => `<div><span class="bulat">${i + 1}</span>${t}</div>`).join('')}</div>
-${tips('Yang baru di versi ini:', 'kolom <b>Harga satuan</b> di samping Order 2, harga manual yang <b>tercatat siapa yang mengisi</b> beserta riwayatnya, tombol <b>+</b> untuk menambah part dari KS, dan dua kolom baru di Excel.')}
+<h3>Alur singkat: 9 langkah sampai jadi</h3>
+<div class="alur">${['Buka menu Forecast', 'Sinkron data', 'Pilih shift &amp; pengaman', 'Baca ringkasan &amp; tabel', 'Lihat rincian part', 'Isi harga manual', 'Tambah part dari KS', 'Keluarkan part dari order', 'Unduh Excel'].map((t, i) => `<div><span class="bulat">${i + 1}</span>${t}</div>`).join('')}</div>
+${tips('Yang baru di versi ini:', 'kolom <b>Harga satuan</b> di samping Order 2, harga manual yang <b>tercatat siapa yang mengisi</b> beserta riwayatnya, tombol <b>+</b> untuk menambah part dari KS, <b>mengeluarkan part yang tidak akan di-order</b>, dan kolom baru di Excel.')}
 <h3>Daftar isi</h3>
-<table><tbody>${[['Langkah 1: Membuka menu Forecast Cinere', 3], ['Langkah 2: Sinkron data dari MRP Cinere', 4], ['Langkah 3: Memilih jumlah shift dan stok pengaman', '5 - 6'], ['Langkah 4: Membaca ringkasan dan tabel', 7], ['Langkah 5: Melihat rincian satu part', 8], ['Langkah 6: Mengisi harga manual dan melihat riwayat', 9], ['Langkah 7: Menambah part dari KS', 10], ['Langkah 8: Mengunduh Excel', 11], ['Cara hitung dan contoh angka', '12 - 13'], ['Memakai dari HP', 14], ['Pertanyaan dan masalah yang sering muncul', 15], ['Daftar periksa setiap kali membuat forecast', 16]].map(([a, b]) => `<tr><td>${a}</td><td class="r" style="width:60px">${b}</td></tr>`).join('')}</tbody></table>
+<table><tbody>${[['Langkah 1: Membuka menu Forecast Cinere', 3], ['Langkah 2: Sinkron data dari MRP Cinere', 4], ['Langkah 3: Memilih jumlah shift dan stok pengaman', '5 - 6'], ['Langkah 4: Membaca ringkasan dan tabel', 7], ['Langkah 5: Melihat rincian satu part', 8], ['Langkah 6: Mengisi harga manual dan melihat riwayat', 9], ['Langkah 7: Menambah part dari KS', 10], ['Langkah 8: Mengeluarkan part dari order', 11], ['Langkah 9: Mengunduh Excel', 12], ['Cara hitung dan contoh angka', '13 - 14'], ['Memakai dari HP', 15], ['Pertanyaan dan masalah yang sering muncul', 16], ['Daftar periksa setiap kali membuat forecast', 17]].map(([a, b]) => `<tr><td>${a}</td><td class="r" style="width:60px">${b}</td></tr>`).join('')}</tbody></table>
 ${tips('Catatan:', 'gambar di panduan ini diambil dari aplikasi asli dengan <b>data contoh</b> (kode part dan angka tidak sama persis dengan data kamu). Angka di layar kamu akan berbeda tergantung tanggal sinkron dan pengaturan yang dipilih.', 'awas')}`)}
 
 ${halaman(`${langkah(1, 'Buka menu Forecast Cinere', 'Dari menu samping (komputer) atau menu bawah (HP)')}
@@ -81,7 +81,7 @@ ${tips('Tips:', 'kalau halaman menampilkan tulisan "Data forecast belum ada", ar
 ${halaman(`${langkah(2, 'Sinkron data dari MRP Cinere', 'Lakukan setiap kali mau membuat forecast baru, misalnya di awal bulan')}
 <p>Sinkron membaca ulang MRP Cinere supaya hitungan memakai data terbaru. Yang dibaca: pemakaian per bulan (tab Outgoing Part), lead time dan harga beli (tab Incoming Part), daftar part Fast Move (tab Moving), serta part tambahan yang sudah kamu pilih.</p>
 ${gambar('d2-tombol', 'Empat tombol di pojok kanan atas halaman.')}
-${leg(['<b>Tambah part</b> (ikon plus). Memilih part dari KS untuk ikut diforecast, dijelaskan di Langkah 7.', '<b>Sinkron</b> (ikon dua panah melingkar). Tekan satu kali, lalu tunggu.', '<b>Panduan</b> (ikon lembar dokumen). Membuka ringkasan cara kerja di dalam aplikasi.', '<b>Unduh Excel</b> (ikon panah ke bawah). Dipakai di Langkah 8.'])}
+${leg(['<b>Tambah part</b> (ikon plus). Memilih part dari KS untuk ikut diforecast, dijelaskan di Langkah 7.', '<b>Sinkron</b> (ikon dua panah melingkar). Tekan satu kali, lalu tunggu.', '<b>Panduan</b> (ikon lembar dokumen). Membuka ringkasan cara kerja di dalam aplikasi.', '<b>Unduh Excel</b> (ikon panah ke bawah). Dipakai di Langkah 9.'])}
 <h3>Yang terjadi setelah menekan Sinkron</h3>
 ${gambar('d3a-toast-jalan', 'Saat berjalan muncul pesan di bagian bawah layar. Tombol sinkron tidak bisa ditekan lagi selama proses berjalan.')}
 ${gambar('d3b-toast-selesai', 'Saat selesai muncul "Sinkron selesai" dan tabel otomatis diperbarui.')}
@@ -149,12 +149,22 @@ ${gambar('d12-part-tambahan', 'Rincian part tambahan: ada nama yang menambahkan 
 ${leg(['Klik <b>Hapus dari forecast</b> untuk mengeluarkan part tambahan. Part Fast Move tidak bisa dihapus dari sini.', 'Tambah dan hapus part juga tercatat di <b>Riwayat perubahan</b>.'])}
 ${tips('Batas:', 'maksimal 200 part tambahan. Part tambahan tetap ada setelah Sinkron.')}`)}
 
-${halaman(`${langkah(8, 'Unduh Excel', 'Atur skenario dulu, baru unduh')}
+${halaman(`${langkah(8, 'Keluarkan part dari order', 'Untuk part yang tidak akan kamu order')}
+<p>Tidak semua part di daftar perlu dipesan, misalnya stoknya sudah cukup atau sedang tidak dipakai. Part seperti itu bisa dikeluarkan supaya tidak ikut ringkasan, estimasi nilai order, dan Excel. Part tidak dihapus dan bisa dikembalikan kapan saja.</p>
+${gambar('d13-keluarkan', 'Bagian Order part ini di rincian part.', 90)}
+${leg(['Isi <b>alasan</b> (boleh dikosongkan), misalnya "stok cukup, tidak dipesan bulan ini".', 'Klik <b>Keluarkan dari order</b>. Part langsung hilang dari tabel dan dari hitungan.'])}
+<h3>Mengembalikan part</h3>
+${gambar('d14-dikeluarkan', 'Daftar Dikeluarkan dari order di bawah tabel.', 50)}
+${leg(['Part yang dikeluarkan pindah ke daftar <b>Dikeluarkan dari order</b> di bawah tabel (klik judulnya untuk membuka), lengkap dengan siapa, kapan, dan alasannya.', 'Klik <b>Kembalikan</b> untuk memasukkan part itu lagi ke order.'])}
+${tips('Berlaku untuk semua pengguna.', 'Daftar dikeluarkan sama untuk semua akun, tetap ada setelah Sinkron, dan setiap pengeluaran atau pengembalian tercatat di Riwayat perubahan. Kartu ringkasan "Part" menulis berapa part yang dikeluarkan.')}`)}
+
+${halaman(`${langkah(9, 'Unduh Excel', 'Atur skenario dulu, baru unduh')}
 <p>Tekan tombol <b>Unduh Excel</b> (panah ke bawah). Browser menyimpan file bernama <b>snd-forecast-cinere-(tanggal).xlsx</b>. Isi file mengikuti pengaturan yang sedang aktif di layar, jadi pilih shift dan stok pengaman yang diinginkan lebih dulu. Semua akun boleh mengunduh.</p>
 ${leg(['Klik tombol Unduh Excel (nomor 4 di Gambar 2). Muncul pesan "Mengunduh forecast ... part ke Excel".'])}
-<h3>Isi file Excel (3 sheet)</h3>
+<h3>Isi file Excel (3 sheet, atau 4 kalau ada part yang dikeluarkan)</h3>
 <table><tbody>
 <tr><td style="width:90px"><b>Forecast</b></td><td>Semua part: pemakaian tiap bulan, baseline, forecast, lead time, pengaman, target stok, stok, saran order, harga, total, serta Order Pertama dan Kedua (pcs dan Rp). Di ujung kanan ada kolom <b>Sumber harga</b> (Manual / PO terakhir / Belum ada), <b>Harga diisi oleh</b> (siapa dan kapan, untuk harga manual), dan <b>Sumber part</b> (Fast Move / Tambahan).</td></tr>
+<tr><td><b>Dikeluarkan</b></td><td>Hanya ada kalau ada part yang dikeluarkan dari order: kode, nama, alasan, siapa, dan kapan. Part ini tidak muncul di sheet Forecast.</td></tr>
 <tr><td><b>Parameter</b></td><td>Pengaturan saat diunduh: skenario, pengali, stok pengaman, lead time bawaan, metode baseline, dan waktu data diperbarui.</td></tr>
 <tr><td><b>Panduan</b></td><td>Ringkasan cara hitung di dalam file, supaya file bisa dibaca orang lain tanpa panduan ini.</td></tr></tbody></table>
 <h3>Cuplikan sheet Forecast (sebagian kolom, data contoh)</h3>
@@ -212,6 +222,7 @@ ${halaman(`<h2>Pertanyaan dan masalah yang sering muncul</h2>
 <div class="tanya"><b>Harga satuan tidak muncul / tertulis "isi harga".</b>Part itu belum pernah di-PO di MRP Cinere. Isi harga manual di rincian part (Langkah 6). Kalau harga PO yang biasanya ada ikut hilang, tekan Sinkron lagi dan muat ulang halaman.</div>
 <div class="tanya"><b>Part yang saya cari tidak ada di daftar Tambah part.</b>Part sudah ada di forecast (Fast Move atau tambahan sebelumnya), atau tidak ada di data KS. Cek lewat menu Monitoring MRP All KS.</div>
 <div class="tanya"><b>Tidak ada tombol untuk membuka sheet MRP.</b>Tautan ke spreadsheet hanya tampil untuk akun admin. Akun lain memang tidak menerima tautan sheet demi keamanan data. Semua yang dibutuhkan untuk forecast sudah ada di aplikasi dan di file Excel.</div>
+<div class="tanya"><b>Part yang saya keluarkan hilang dari tabel.</b>Part itu pindah ke daftar "Dikeluarkan dari order" di bawah tabel. Klik judul daftarnya untuk membuka, lalu tekan Kembalikan di partnya. Daftar ini sama untuk semua pengguna dan tetap ada setelah Sinkron.</div>
 <div class="tanya"><b>Halaman menulis "Data forecast belum ada".</b>Sinkron belum pernah dijalankan atau datanya kosong. Tekan Sinkron (atau "Sinkron sekarang") dan tunggu sampai muncul pesan selesai.</div>
 <div class="tanya"><b>Sinkron gagal atau lama sekali.</b>Cek koneksi internet lalu tekan lagi. Kalau muncul "Sinkron lain sedang berjalan", tunggu sekitar satu menit. Data lama tetap bisa dipakai. Kalau terus gagal, kabari tim yang mengelola aplikasi.</div>
 <div class="tanya"><b>Bulan depan, apa yang harus dilakukan?</b>Cukup tekan Sinkron lagi. Periode baseline bergeser sendiri ke tiga bulan penuh terakhir (Desember memakai September sampai November).</div>
@@ -226,6 +237,7 @@ ${halaman(`<h2>Daftar periksa setiap kali membuat forecast</h2>
 <li>Pilih <b>jumlah shift</b> dan <b>stok pengaman</b>.</li>
 <li>Cek kartu ringkasan: berapa part perlu order, dan berapa part belum ada harga.</li>
 <li>Untuk part yang menulis <b>isi harga</b>: klik barisnya, isi harga manual, <b>Simpan harga</b>.</li>
+<li>Part yang tidak akan di-order: buka rinciannya, isi alasan, lalu <b>Keluarkan dari order</b>.</li>
 <li>Buka rincian beberapa part terbesar, cocokkan pemakaian bulanan, lead time, dan stoknya.</li>
 <li>Untuk part yang pemakaiannya naik-turun tajam, coba baseline <b>Median</b>.</li>
 <li>Tekan <b>Unduh Excel</b> dan simpan file-nya.</li>
