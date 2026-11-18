@@ -454,7 +454,7 @@ button.notif { font: inherit; color: inherit; }
 
 /* Tugas Saya (pribadi) */
 .tg-form { display: grid; grid-template-columns: 1fr; gap: 8px; }
-@media (min-width: 760px) { .tg-form { grid-template-columns: minmax(0, 1fr) 150px 160px auto; } }
+@media (min-width: 760px) { .tg-form { grid-template-columns: minmax(0, 1fr) 150px 150px 150px auto; } }
 .tg-kelompok { margin-top: 16px; }
 .tg-kelompok h3 { margin: 0 0 6px 2px; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); font-weight: 600; }
 .tg-kelompok h3 span { font-weight: 500; margin-left: 4px; }
