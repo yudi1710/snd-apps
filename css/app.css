@@ -480,3 +480,9 @@ button.notif { font: inherit; color: inherit; }
 .tg-pil.tg-merah-garis { color: var(--crit); background: transparent; }
 .tg-catatan { font-size: 12.5px; color: var(--text-2); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .tg-tile-merah b { color: var(--crit); }
+
+/* Notifikasi: tombol hapus per item */
+.notif-wadah { position: relative; }
+.notif-wadah .notif { padding-right: 38px; }
+.notif-x { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--text-3); font-size: 20px; line-height: 1; cursor: pointer; }
+.notif-x:hover { background: var(--surface-2); color: var(--text); }
