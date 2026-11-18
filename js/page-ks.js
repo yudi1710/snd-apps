@@ -95,7 +95,7 @@
     const b = $('btnMuat');
     if (b) b.disabled = true;
     if (paksa) toast('Membaca tab KS semua cabang…');
-    App.ambil('getDataKS', paksa ? 0 : 120000).then(d => {
+    App.ambil('getDataKS', paksa ? 0 : 120000, paksa === true).then(d => { // true = server melewati cache 10 menit
       DATA = d; gabungCache = null;
       subTeks = `${d.update} · ${angka(d.rows.length)} baris · ${d.cabang.length} cabang · Servia: ${d.updateServia || 'belum ada data (bot sinkron jam 12:00)'}${d.offlineSejak ? ' · offline' : ''}`;
       if (App.state.aktif !== 'ks') return; // pengguna sudah pindah halaman

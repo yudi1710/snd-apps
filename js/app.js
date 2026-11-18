@@ -123,6 +123,7 @@ window.App = (function () {
 
   async function panggil(kredensial, aksi, args) {
     let teks;
+    const t0 = performance.now();
     try {
       const res = await fetch(CFG.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ ...kredensial, aksi, args }), redirect: 'follow' });
       teks = await res.text();
@@ -133,6 +134,7 @@ window.App = (function () {
     }
     let j;
     try { j = JSON.parse(teks); } catch (e) { throw new Error('Jawaban server tidak dikenal (cek URL API).'); }
+    if (j.ms != null) console.debug('[api] ' + aksi + ': server ' + j.ms + ' ms, total ' + (Math.round(performance.now() - t0)) + ' ms');
     if (j.error) {
       if (j.kode === 401) { hapusSesi(); keluar(true); }
       throw new Error(j.error);
