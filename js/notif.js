@@ -41,7 +41,9 @@
   function hitung(d) {
     const batas = d.batas || 3;
     const hasil = [];
-    (d.rows || []).filter(r => !r.selesai).forEach(r => {
+    const partialLama = d.partialLama || 30;
+    // PO partial yang sudah lama (sebagian barang sudah datang) tidak diingatkan lagi; PO yang dibatalkan sudah dibuang di server
+    (d.rows || []).filter(r => !r.selesai && !(r.recv > 0 && r.aging !== null && r.aging !== '' && r.aging >= partialLama)).forEach(r => {
       if (r.aging !== null && r.aging >= batas) hasil.push({ id: `rem|${r.key}|${Math.floor(r.aging / batas)}`, jenis: 'reminder', r });
       if (r.etaInput && r.etaInput < d.today) hasil.push({ id: `eta|${r.key}|${r.etaInput}`, jenis: 'eta', r });
     });
